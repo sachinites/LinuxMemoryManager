@@ -46,16 +46,20 @@ mm_init(){
         assert(0);
 }
 
+/*Return a fresh new virtual page*/
 vm_page_t *
 allocate_vm_page(){
 
     vm_page_t *vm_page = calloc(1, SYSTEM_PAGE_SIZE);
     vm_page->block_meta_data.is_free = MM_TRUE;
     vm_page->block_meta_data.block_size = 
-        (SYSTEM_PAGE_SIZE - sizeof(block_meta_data_t));
+        (SYSTEM_PAGE_SIZE - sizeof(block_meta_data_t) -
+        sizeof(vm_page_t *) -  sizeof(vm_page_t *));
     vm_page->block_meta_data.offset = 0;
-    vm_page->block_meta_data.next = NULL;
-    vm_page->block_meta_data.prev = NULL;
+    init_glthread(&vm_page->block_meta_data.priority_thread_glue);
+    vm_page->block_meta_data.prev_block = NULL;
+    vm_page->next = NULL;
+    vm_page->prev = NULL;
     return vm_page;
 }
 
@@ -147,12 +151,63 @@ free_blocks_comparison_function(
 
 static void
 mm_add_free_block_data_to_free_block_list(
-        glthread_t *list_head, block_meta_data_t *free_block){
+        vm_page_family_t *vm_page_family, 
+        block_meta_data_t *free_block){
 
     assert(free_block->is_free == MM_TRUE);
-    glthread_priority_insert(list_head, &free_block->priority_thread_glue,
+    glthread_priority_insert(&vm_page_family->free_block_priority_list_head, 
+            &free_block->priority_thread_glue,
             free_blocks_comparison_function,
             (size_t)&(((block_meta_data_t *)0)->priority_thread_glue));
+}
+
+static vm_page_t *
+mm_family_new_page_add(vm_page_family_t *vm_page_family){
+
+    vm_page_t *vm_page = allocate_vm_page();
+
+    /*The new page is like one free block, add it to the
+     * free block list*/
+    mm_add_free_block_data_to_free_block_list(
+        vm_page_family, &vm_page->block_meta_data);
+
+    /*Add the page to the list of pages maintained by page family*/
+    if(!vm_page_family->first_page){
+        vm_page_family->first_page = vm_page;
+        return vm_page;
+    }
+    vm_page->next = vm_page_family->first_page;
+    vm_page_family->first_page->prev = vm_page;
+
+    return vm_page;
+}
+
+static void
+mm_allocate_free_block(
+    vm_page_family_t *vm_page_family,
+    block_meta_data_t *block_meta_data, uint32_t size){
+
+    assert(block_meta_data->is_free == MM_TRUE);
+    assert(block_meta_data->block_size >= size);
+    uint32_t remaining_size = block_meta_data->block_size - size;
+    block_meta_data->is_free == MM_FALSE;
+    block_meta_data->block_size = size;
+    block_meta_data->offset =  block_meta_data->offset; /*Unchanged*/
+    remove_glthread(&block_meta_data->priority_thread_glue);
+    if(!remaining_size)
+        return;
+    block_meta_data_t *next_block_meta_data = NULL;
+
+    if(remaining_size > sizeof(block_meta_data_t)){
+        next_block_meta_data = NEXT_META_BLOCK(block_meta_data);
+        next_block_meta_data->is_free = MM_TRUE;
+        next_block_meta_data->block_size = remaining_size - sizeof(block_meta_data_t);
+        next_block_meta_data->offset = block_meta_data->offset + 
+            sizeof(block_meta_data) + block_meta_data->block_size;
+        init_glthread(&next_block_meta_data->priority_thread_glue); 
+        mm_add_free_block_data_to_free_block_list(
+            vm_page_family, block_meta_data);
+    }
 }
 
 static vm_page_t *
@@ -161,22 +216,28 @@ mm_get_page_satisfying_request(
         uint32_t req_size, 
         block_meta_data_t **block_meta_data/*O/P*/){
 
-    return NULL;    
+    vm_page_t *vm_page = NULL;
+
+    block_meta_data_t *biggest_block_meta_data = 
+        mm_get_biggest_free_block_page_family(vm_page_family); 
+
+    if(!biggest_block_meta_data || 
+        biggest_block_meta_data->block_size < req_size){
+
+        /*Time to add a new page to Page family to satisfy the request*/
+        vm_page = mm_family_new_page_add(vm_page_family);
+        /*Allocate the free block from this page now*/
+        mm_allocate_free_block(vm_page_family, 
+            &vm_page->block_meta_data, req_size);
+        *block_meta_data = &vm_page->block_meta_data;
+        return vm_page;
+    }
+    /*The biggest block meta data can satisfy the request*/
+    mm_allocate_free_block(vm_page_family, 
+        biggest_block_meta_data, req_size);
+    *block_meta_data = biggest_block_meta_data;
+    return MM_GET_PAGE_FROM_META_BLOCK(biggest_block_meta_data);
 }
-
-static void *
-mm_page_allocate_memory(vm_page_t * vm_page, 
-            uint32_t req_size){
-
-    return NULL;
-}
-
-static vm_page_t *
-mm_family_new_page_add(vm_page_family_t *vm_page_family){
-
-    return NULL;
-}
-
 
 void *
 xcalloc(char *struct_name, int units){
@@ -200,15 +261,10 @@ xcalloc(char *struct_name, int units){
     }
 
     if(!pg_family->first_page){
-        pg_family->first_page = allocate_vm_page();
-        pg_family->first_page->block_meta_data.is_free = MM_FALSE;
-        pg_family->first_page->block_meta_data.block_size = 
-            units * pg_family->struct_size;
-        pg_family->first_page->block_meta_data.next = NULL;
-        pg_family->first_page->block_meta_data.prev = NULL;
-        mm_add_free_block_data_to_free_block_list(
-            &pg_family->free_block_priority_list_head,
-            &pg_family->first_page->block_meta_data);
+        pg_family->first_page = mm_family_new_page_add(pg_family);
+        mm_allocate_free_block(pg_family, 
+            &pg_family->first_page->block_meta_data, 
+            units * pg_family->struct_size);
         return (void *)pg_family->first_page->page_memory;
     }
     
@@ -217,15 +273,83 @@ xcalloc(char *struct_name, int units){
     vm_page_t *vm_page_curr = mm_get_page_satisfying_request(
                         pg_family, units * pg_family->struct_size,
                         &free_block_meta_data);
-    if(!vm_page_curr){
-        /*Create a new page*/
-        vm_page_curr = mm_family_new_page_add(pg_family);
-        result = mm_page_allocate_memory(vm_page_curr, 
-            units * pg_family->struct_size);
-        return result;
-    }
     return  (void *)(free_block_meta_data + 1);
 }
 
+static void
+mm_union_free_blocks(block_meta_data_t *first,
+        block_meta_data_t *second){
 
+    assert(first->is_free == MM_TRUE &&
+        second->is_free == MM_TRUE);
 
+    block_meta_data_t *third_block = 
+        NEXT_META_BLOCK(second);
+        
+    first->block_size += sizeof(block_meta_data_t) +
+            second->block_size;
+    remove_glthread(&first->priority_thread_glue);
+    remove_glthread(&second->priority_thread_glue);
+    third_block->prev_block = first;
+}
+
+static void
+mm_vm_page_delete_and_free(
+        vm_page_t *vm_page){
+
+    vm_page_family_t *vm_page_family = 
+        vm_page->pg_family;
+
+    assert(vm_page_family->first_page);
+
+    if(vm_page_family->first_page == vm_page){
+        vm_page_family->first_page = vm_page->next;
+        if(vm_page->next)
+            vm_page->next->prev = NULL;
+        free(vm_page);
+        return;
+    }
+
+    vm_page->next->prev = vm_page->prev;
+    vm_page->prev->next = vm_page->next;
+    free(vm_page);
+}
+
+static block_meta_data_t *
+mm_free_blocks(block_meta_data_t *free_block){
+
+    block_meta_data_t *return_block = NULL;
+
+    assert(free_block->is_free == MM_FALSE);
+    free_block->is_free = MM_TRUE;
+
+    block_meta_data_t *next_block = NEXT_META_BLOCK(next_block);
+    if(next_block->is_free == MM_TRUE){
+        /*Union two free blocks*/
+        mm_union_free_blocks(free_block, next_block);
+        return_block = free_block;
+    }
+    /*Chck the previous block if it was free*/
+    block_meta_data_t *prev_block = PREV_META_BLOCK(free_block);
+    if(prev_block->is_free){
+        mm_union_free_blocks(prev_block, free_block);
+        return_block = prev_block;
+    }
+    vm_page_t *hosting_page = GET_BLOCK_HOSTING_VM_PAGE(return_block);
+    if(IS_VM_PAGE_EMPTY(hosting_page)){
+        /*Remove this vm page from list and free it*/
+        mm_vm_page_delete_and_free(hosting_page);
+        return NULL;
+    }
+    return return_block;
+}
+
+void
+xfree(void *app_data){
+
+    block_meta_data_t *block_meta_data = 
+        (block_meta_data_t *)((char *)app_data - sizeof(block_meta_data_t));
+    
+    assert(block_meta_data->is_free == MM_FALSE);
+    mm_free_blocks(block_meta_data);
+}

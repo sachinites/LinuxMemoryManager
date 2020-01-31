@@ -33,6 +33,8 @@
 
 #include <stdint.h>
 #include "gluethread/glthread.h"
+#include <stddef.h> /*for size_t*/
+
 
 typedef enum{
 
@@ -45,20 +47,44 @@ typedef struct block_meta_data_{
     vm_bool_t is_free;
     uint32_t block_size;
     uint32_t offset;    /*offset from the start of the page*/
-    struct block_meta_data_ *next;
-    struct block_meta_data_ *prev;
     glthread_t priority_thread_glue;
+    struct block_meta_data_ *prev_block;
 } block_meta_data_t;
 GLTHREAD_TO_STRUCT(glthread_to_block_meta_data, 
     block_meta_data_t, priority_thread_glue, glthread_ptr);
 
+#define offset_of(container_structure, field_name)  \
+    ((size_t)&(((container_structure *)0)->field_name))
+
+/*Forward Declaration*/
+struct vm_page_family_;
+
 typedef struct vm_page_{
+    struct vm_page_ *next;
+    struct vm_page_ *prev;
+    struct vm_page_family_ *pg_family; /*back pointer*/
     block_meta_data_t block_meta_data;
     char page_memory[0];
 } vm_page_t;
 
 #define MM_GET_PAGE_FROM_META_BLOCK(block_meta_data_ptr)    \
     ((vm_page_t *)((char *)block_meta_data_ptr - block_meta_data_ptr->offset))
+
+#define NEXT_META_BLOCK(block_meta_data_ptr)    \
+    (block_meta_data_t *)((char *)(block_meta_data_ptr + 1) \
+    + block_meta_data_ptr->block_size)
+
+#define PREV_META_BLOCK(block_meta_data_ptr)    \
+    (block_meta_data_ptr->prev_block)
+
+#define GET_BLOCK_HOSTING_VM_PAGE(block_meta_data_ptr)  \
+    (vm_page_t *)((char *)block_meta_data_ptr - block_meta_data_ptr->offset)
+
+#define IS_VM_PAGE_EMPTY(vm_page_t_ptr)                 \
+    ((vm_page_t_ptr->block_meta_data.block_size ==      \
+        (SYSTEM_PAGE_SIZE - sizeof(block_meta_data_t) - \
+        sizeof(vm_page_t *) -  sizeof(vm_page_t *))) && \
+        vm_page_t_ptr->block_meta_data.is_free == MM_TRUE)
 
 #define MM_MAX_STRUCT_NAME 32
 typedef struct vm_page_family_{
@@ -70,6 +96,20 @@ typedef struct vm_page_family_{
     struct vm_page_family_ *prev;
     glthread_t free_block_priority_list_head;
 } vm_page_family_t;
+
+static inline block_meta_data_t *
+mm_get_biggest_free_block_page_family(
+        vm_page_family_t *vm_page_family){
+
+    glthread_t *biggest_free_block_glue = 
+        vm_page_family->free_block_priority_list_head.right;
+
+    block_meta_data_t *block_meta_data = (block_meta_data_t *)
+            (char *)biggest_free_block_glue - \
+            offset_of(block_meta_data_t, priority_thread_glue);
+
+    return block_meta_data;
+}
 
 void
 mm_instantiate_new_page_family(
