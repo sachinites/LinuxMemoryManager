@@ -49,6 +49,7 @@ typedef struct block_meta_data_{
     uint32_t offset;    /*offset from the start of the page*/
     glthread_t priority_thread_glue;
     struct block_meta_data_ *prev_block;
+    struct block_meta_data_ *next_block;
 } block_meta_data_t;
 GLTHREAD_TO_STRUCT(glthread_to_block_meta_data, 
     block_meta_data_t, priority_thread_glue, glthread_ptr);
@@ -71,20 +72,26 @@ typedef struct vm_page_{
     ((vm_page_t *)((char *)block_meta_data_ptr - block_meta_data_ptr->offset))
 
 #define NEXT_META_BLOCK(block_meta_data_ptr)    \
+    (block_meta_data_ptr->next_block)
+
+#define NEXT_META_BLOCK_BY_SIZE(block_meta_data_ptr)    \
     (block_meta_data_t *)((char *)(block_meta_data_ptr + 1) \
-    + block_meta_data_ptr->block_size)
+        + block_meta_data_ptr->block_size)
 
 #define PREV_META_BLOCK(block_meta_data_ptr)    \
     (block_meta_data_ptr->prev_block)
 
-#define GET_BLOCK_HOSTING_VM_PAGE(block_meta_data_ptr)  \
-    (vm_page_t *)((char *)block_meta_data_ptr - block_meta_data_ptr->offset)
+#define mm_bind_blocks(block_meta_data_ptr1, block_meta_data_ptr2)  \
+    block_meta_data_ptr2->prev_block = block_meta_data_ptr1;        \
+    block_meta_data_ptr2->next_block = block_meta_data_ptr1->next_block;    \
+    block_meta_data_ptr1->next_block = block_meta_data_ptr2;                \
+    if(block_meta_data_ptr2->next_block)\
+        block_meta_data_ptr2->next_block->prev_block = block_meta_data_ptr2
+    
 
-#define IS_VM_PAGE_EMPTY(vm_page_t_ptr)                 \
-    ((vm_page_t_ptr->block_meta_data.block_size ==      \
-        (SYSTEM_PAGE_SIZE - sizeof(block_meta_data_t) - \
-        sizeof(vm_page_t *) -  sizeof(vm_page_t *))) && \
-        vm_page_t_ptr->block_meta_data.is_free == MM_TRUE)
+vm_bool_t
+mm_is_vm_page_empty(vm_page_t *vm_page);
+
 
 #define MM_MAX_STRUCT_NAME 32
 typedef struct vm_page_family_{
@@ -149,4 +156,22 @@ lookup_page_family_by_name(char *struct_name);
 #define ITERATE_VM_PAGE_END(vm_page_family_ptr, curr)   \
     }}
 
+#define ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page_ptr, curr)    \
+{\
+    curr = &vm_page_ptr->block_meta_data;\
+    block_meta_data_t *next = NULL;\
+    for( ; curr; curr = next){\
+        next = NEXT_META_BLOCK(curr);
+
+#define ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_ptr, curr)   \
+    }}
+
+
+
+
+
+void
+xfree(void *app_data);
+void
+mm_print_memory_usage();
 #endif /**/
