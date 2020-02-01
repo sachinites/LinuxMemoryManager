@@ -96,7 +96,6 @@ typedef struct vm_page_{
 vm_bool_t
 mm_is_vm_page_empty(vm_page_t *vm_page);
 
-
 #define MM_MAX_STRUCT_NAME 32
 typedef struct vm_page_family_{
 
@@ -106,6 +105,9 @@ typedef struct vm_page_family_{
     struct vm_page_family_ *next;
     struct vm_page_family_ *prev;
     glthread_t free_block_priority_list_head;
+    /*Statistics*/
+    uint32_t total_memory_in_use_by_app;
+    uint32_t no_of_system_calls_to_alloc_dealloc_vm_pages;
 } vm_page_family_t;
 
 static inline block_meta_data_t *
@@ -114,8 +116,11 @@ mm_get_biggest_free_block_page_family(
 
     glthread_t *biggest_free_block_glue = 
         vm_page_family->free_block_priority_list_head.right;
+    
+    if(biggest_free_block_glue)
+        return glthread_to_block_meta_data(biggest_free_block_glue);
 
-    return glthread_to_block_meta_data(biggest_free_block_glue);
+    return NULL;
 }
 
 void
@@ -166,12 +171,9 @@ lookup_page_family_by_name(char *struct_name);
 #define ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_ptr, curr)   \
     }}
 
+void xfree(void *app_data);
 
+void mm_print_memory_usage();
 
-
-
-void
-xfree(void *app_data);
-void
-mm_print_memory_usage();
+void mm_vm_page_delete_and_free(vm_page_t *vm_page);
 #endif /**/

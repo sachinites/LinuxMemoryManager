@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "mm.h"
+#include <assert.h>
 
 typedef struct emp_ {
 
@@ -14,6 +15,7 @@ typedef struct student_ {
     uint32_t marks_phys;
     uint32_t marks_chem;
     uint32_t marks_maths;
+    struct student_ *next;
 } student_t;
 
 int
@@ -22,7 +24,7 @@ main(int argc, char **argv){
     mm_init();
     mm_instantiate_new_page_family("emp_t", sizeof(emp_t));
     mm_instantiate_new_page_family("student_t", sizeof(student_t));
-
+#if 0
     emp_t *emp1 = xcalloc("emp_t", 1);
     emp_t *emp2 = xcalloc("emp_t", 1);
     emp_t *emp3 = xcalloc("emp_t", 1);
@@ -44,6 +46,29 @@ main(int argc, char **argv){
     xfree(stud2);
     mm_print_memory_usage();
     xfree(stud3);
+    mm_print_memory_usage();
+#endif
+    int i = 0;
+    student_t *stud = NULL, *prev = NULL;
+    student_t *first = NULL;
+    for( ; i < 120; i++){
+        stud = xcalloc("student_t", 1);
+        if(i == 0)
+            first = stud;
+        assert(stud);
+        if(prev){
+            prev->next = stud;
+        }
+        prev = stud;
+    }
+    scanf("\n");
+    mm_print_memory_usage();
+    scanf("\n");
+    student_t *next = NULL;
+    for( ; first; first = next){
+        next = first->next;
+        xfree(first);
+    }
     mm_print_memory_usage();
     return 0;
 }
