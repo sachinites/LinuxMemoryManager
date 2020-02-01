@@ -64,6 +64,7 @@ typedef struct vm_page_{
     struct vm_page_ *next;
     struct vm_page_ *prev;
     struct vm_page_family_ *pg_family; /*back pointer*/
+    uint32_t page_index;
     block_meta_data_t block_meta_data;
     char page_memory[0];
 } vm_page_t;

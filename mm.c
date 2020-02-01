@@ -55,9 +55,34 @@ mm_max_page_allocatable_memory(){
 #define MAX_PAGE_ALLOCATABLE_MEMORY \
     (mm_max_page_allocatable_memory())
 
+static vm_page_t *
+mm_get_available_page_index(vm_page_family_t *vm_page_family){
+
+    vm_page_t *curr, *prev;
+    int page_index = -1;
+
+    if(!vm_page_family->first_page)
+        return NULL;
+
+    ITERATE_VM_PAGE_BEGIN(vm_page_family, curr){
+
+        if((int)(curr->page_index) == page_index + 1){
+            page_index++;
+            prev = curr;
+            continue;
+        }
+        return curr->prev;
+    } ITERATE_VM_PAGE_END(vm_page_family, curr)
+
+    return prev;
+}
+
 /*Return a fresh new virtual page*/
 vm_page_t *
-allocate_vm_page(){
+allocate_vm_page(vm_page_family_t *vm_page_family){
+
+    vm_page_t *prev_page = 
+        mm_get_available_page_index(vm_page_family);
 
     vm_page_t *vm_page = calloc(1, SYSTEM_PAGE_SIZE);
     vm_page->block_meta_data.is_free = MM_TRUE;
@@ -70,6 +95,21 @@ allocate_vm_page(){
      vm_page->block_meta_data.next_block = NULL;
     vm_page->next = NULL;
     vm_page->prev = NULL;
+    vm_page_family->no_of_system_calls_to_alloc_dealloc_vm_pages++;
+    vm_page->pg_family = vm_page_family;
+
+    if(!prev_page){
+        vm_page->page_index = 0;
+        vm_page_family->first_page = vm_page;
+        return vm_page;
+    }
+
+    vm_page->next = prev_page->next;
+    vm_page->prev = prev_page;
+    if(vm_page->next)
+        vm_page->next->prev = vm_page;
+    prev_page->next = vm_page;
+    vm_page->page_index = prev_page->page_index + 1;
     return vm_page;
 }
 
@@ -174,9 +214,7 @@ mm_add_free_block_meta_data_to_free_block_list(
 static vm_page_t *
 mm_family_new_page_add(vm_page_family_t *vm_page_family){
 
-    vm_page_t *vm_page = allocate_vm_page();
-
-    vm_page_family->no_of_system_calls_to_alloc_dealloc_vm_pages++;
+    vm_page_t *vm_page = allocate_vm_page(vm_page_family);
 
     if(!vm_page)
         return NULL;
@@ -186,18 +224,6 @@ mm_family_new_page_add(vm_page_family_t *vm_page_family){
     mm_add_free_block_meta_data_to_free_block_list(
         vm_page_family, &vm_page->block_meta_data);
 
-    /*Add the page to the list of pages maintained by page family*/
-    if(!vm_page_family->first_page){
-        vm_page_family->first_page = vm_page;
-        vm_page->pg_family = vm_page_family;
-        return vm_page;
-    }
-    vm_page->pg_family = vm_page_family;
-    /* Add this new virtual Memory Page to front of the
-     * list managed by page family*/
-    vm_page->next = vm_page_family->first_page;
-    vm_page_family->first_page->prev = vm_page;
-    vm_page_family->first_page = vm_page;
     return vm_page;
 }
 
@@ -466,7 +492,7 @@ mm_is_vm_page_empty(vm_page_t *vm_page){
 void
 mm_print_vm_page_details(vm_page_t *vm_page, uint32_t i){
 
-    printf("\tPage %u. \n", i);
+    printf("\tPage Index : %u \n", vm_page->page_index);
     printf("\t\t next = %p, prev = %p\n", vm_page->next, vm_page->prev);
     printf("\t\t page family = %s\n", vm_page->pg_family->struct_name);
 

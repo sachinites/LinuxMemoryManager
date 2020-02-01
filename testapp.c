@@ -64,11 +64,13 @@ main(int argc, char **argv){
     scanf("\n");
     mm_print_memory_usage();
     scanf("\n");
+    #if 1
     student_t *next = NULL;
     for( ; first; first = next){
         next = first->next;
         xfree(first);
     }
     mm_print_memory_usage();
+    #endif
     return 0;
 }
