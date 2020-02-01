@@ -569,3 +569,43 @@ mm_print_memory_usage(){
         SYSTEM_PAGE_SIZE) + 
         (number_of_struct_families * sizeof(vm_page_family_t))));
 }
+
+void
+mm_print_block_usage(){
+
+    vm_page_t *vm_page_curr;
+    vm_page_family_t *vm_page_family_curr;
+    block_meta_data_t *block_meta_data_curr;
+    uint32_t total_block_count, free_block_count,
+             occupied_block_count;
+    uint32_t application_memory_usage;
+
+    ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_family, vm_page_family_curr){
+
+        total_block_count = 0;
+        free_block_count = 0;
+        application_memory_usage = 0;
+        occupied_block_count = 0;
+        ITERATE_VM_PAGE_BEGIN(vm_page_family_curr, vm_page_curr){
+
+            ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page_curr, block_meta_data_curr){
+        
+                total_block_count++;
+                if(block_meta_data_curr->is_free == MM_TRUE){
+                    free_block_count++;
+                }
+                else{
+                    application_memory_usage += 
+                        block_meta_data_curr->block_size + \
+                        sizeof(block_meta_data_t);
+                    occupied_block_count++;
+                }
+            } ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_curr, block_meta_data_curr);
+        } ITERATE_VM_PAGE_END(vm_page_family_curr, vm_page_curr);
+
+    printf("%-20s   TBC : %-4u    FBC : %-4u    OBC : %-4u AppMemUsage : %u\n",
+        vm_page_family_curr->struct_name, total_block_count,
+        free_block_count, occupied_block_count, application_memory_usage);
+
+    } ITERATE_PAGE_FAMILIES_END(first_vm_page_family, vm_page_family_curr); 
+}

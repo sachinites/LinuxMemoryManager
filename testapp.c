@@ -61,9 +61,8 @@ main(int argc, char **argv){
         }
         prev = stud;
     }
-    scanf("\n");
     mm_print_memory_usage();
-    scanf("\n");
+    mm_print_block_usage();
     #if 1
     student_t *next = NULL;
     for( ; first; first = next){
@@ -71,6 +70,7 @@ main(int argc, char **argv){
         xfree(first);
     }
     mm_print_memory_usage();
+    mm_print_block_usage();
     #endif
     return 0;
 }
