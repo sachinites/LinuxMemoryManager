@@ -34,6 +34,7 @@
 #include <assert.h>
 #include <string.h>
 #include <unistd.h> /*for getpagesize*/
+#include "css.h"
 
 static vm_page_family_t *first_vm_page_family = NULL;
 static size_t SYSTEM_PAGE_SIZE = 0;
@@ -167,7 +168,7 @@ mm_add_free_block_meta_data_to_free_block_list(
     glthread_priority_insert(&vm_page_family->free_block_priority_list_head, 
             &free_block->priority_thread_glue,
             free_blocks_comparison_function,
-            (size_t)&(((block_meta_data_t *)0)->priority_thread_glue));
+            offset_of(block_meta_data_t, priority_thread_glue));
 }
 
 static vm_page_t *
@@ -212,7 +213,7 @@ mm_allocate_free_block(
 
     block_meta_data->is_free = MM_FALSE;
     block_meta_data->block_size = size;
-    
+ 
     /*Unchanged*/
     //block_meta_data->offset =  ??
     
@@ -244,10 +245,12 @@ mm_allocate_free_block(
         remaining_size - sizeof(block_meta_data_t);
 
     next_block_meta_data->offset = block_meta_data->offset + 
-        sizeof(block_meta_data) + block_meta_data->block_size;
+        sizeof(block_meta_data_t) + block_meta_data->block_size;
 
     init_glthread(&next_block_meta_data->priority_thread_glue); 
-    mm_bind_blocks(block_meta_data, next_block_meta_data);
+    
+    mm_bind_blocks_for_allocation(block_meta_data, next_block_meta_data);
+    
     mm_add_free_block_meta_data_to_free_block_list(
             vm_page_family, next_block_meta_data);
 }
@@ -327,16 +330,11 @@ mm_union_free_blocks(block_meta_data_t *first,
     assert(first->is_free == MM_TRUE &&
         second->is_free == MM_TRUE);
 
-    block_meta_data_t *third_block = 
-        NEXT_META_BLOCK(second);
-        
     first->block_size += sizeof(block_meta_data_t) +
             second->block_size;
     remove_glthread(&first->priority_thread_glue);
     remove_glthread(&second->priority_thread_glue);
-    if(third_block){
-        mm_bind_blocks(first, third_block);
-    }
+    mm_bind_blocks_for_deallocation(first, second);
 }
 
 static void
@@ -395,7 +393,7 @@ mm_free_blocks(block_meta_data_t *to_be_free_block){
     }
     mm_add_free_block_meta_data_to_free_block_list(
             hosting_page->pg_family, return_block);
-
+    
     return return_block;
 }
 
@@ -433,8 +431,9 @@ mm_print_vm_page_details(vm_page_t *vm_page, uint32_t i){
     block_meta_data_t *curr;
     ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page, curr){
 
-        printf("\t\t\t Block %-3u %s  block_size = %-6u  "
-                "offset = %-6u  prev = %-14p  next = %p\n", 
+        printf(ANSI_COLOR_YELLOW "\t\t\t%-14p Block %-3u %s  block_size = %-6u  "
+                "offset = %-6u  prev = %-14p  next = %p\n"
+                ANSI_COLOR_RESET, curr,
                 j++, curr->is_free ? "F R E E D" : "ALLOCATED",
                 curr->block_size, curr->offset, 
                 curr->prev_block,
@@ -453,12 +452,17 @@ mm_print_memory_usage(){
 
     ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_family, vm_page_family_curr){
 
-        printf("vm_page_family : %s, struct size = %u\n", 
+        printf(ANSI_COLOR_GREEN "vm_page_family : %s, struct size = %u\n" 
+                ANSI_COLOR_RESET,
                 vm_page_family_curr->struct_name,
                 vm_page_family_curr->struct_size);
+        
+        i = 0;
 
         ITERATE_VM_PAGE_BEGIN(vm_page_family_curr, vm_page){
+       
             mm_print_vm_page_details(vm_page, i++);
+
         } ITERATE_VM_PAGE_END(vm_page_family_curr, vm_page);
         printf("\n");
     } ITERATE_PAGE_FAMILIES_END(first_vm_page_family, vm_page_family_curr)

@@ -81,13 +81,17 @@ typedef struct vm_page_{
 #define PREV_META_BLOCK(block_meta_data_ptr)    \
     (block_meta_data_ptr->prev_block)
 
-#define mm_bind_blocks(block_meta_data_ptr1, block_meta_data_ptr2)  \
-    block_meta_data_ptr2->prev_block = block_meta_data_ptr1;        \
-    block_meta_data_ptr2->next_block = block_meta_data_ptr1->next_block;    \
-    block_meta_data_ptr1->next_block = block_meta_data_ptr2;                \
-    if(block_meta_data_ptr2->next_block)\
-        block_meta_data_ptr2->next_block->prev_block = block_meta_data_ptr2
-    
+#define mm_bind_blocks_for_allocation(allocated_meta_block, free_meta_block)  \
+    free_meta_block->prev_block = allocated_meta_block;        \
+    free_meta_block->next_block = allocated_meta_block->next_block;    \
+    allocated_meta_block->next_block = free_meta_block;                \
+    if (free_meta_block->next_block)\
+    free_meta_block->next_block->prev_block = free_meta_block
+
+#define mm_bind_blocks_for_deallocation(freed_meta_block_top, freed_meta_block_down)    \
+    freed_meta_block_top->next_block = freed_meta_block_down->next_block;               \
+    if(freed_meta_block_down->next_block)                                               \
+    freed_meta_block_down->next_block->prev_block = freed_meta_block_top
 
 vm_bool_t
 mm_is_vm_page_empty(vm_page_t *vm_page);
@@ -111,11 +115,7 @@ mm_get_biggest_free_block_page_family(
     glthread_t *biggest_free_block_glue = 
         vm_page_family->free_block_priority_list_head.right;
 
-    block_meta_data_t *block_meta_data = (block_meta_data_t *)
-            (char *)biggest_free_block_glue - \
-            offset_of(block_meta_data_t, priority_thread_glue);
-
-    return block_meta_data;
+    return glthread_to_block_meta_data(biggest_free_block_glue);
 }
 
 void
