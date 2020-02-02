@@ -124,16 +124,8 @@ mm_get_biggest_free_block_page_family(
     return NULL;
 }
 
-void
-mm_instantiate_new_page_family(
-    char *struct_name, 
-    uint32_t struct_size);
-
 vm_page_t *
 allocate_vm_page();
-
-void *
-xcalloc(char *struct_name, int units);
 
 void
 mm_init();
@@ -172,9 +164,5 @@ lookup_page_family_by_name(char *struct_name);
 #define ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_ptr, curr)   \
     }}
 
-void xfree(void *app_data);
-
-void mm_print_memory_usage();
-void mm_print_block_usage();
 void mm_vm_page_delete_and_free(vm_page_t *vm_page);
 #endif /**/

@@ -553,17 +553,22 @@ mm_print_memory_usage(){
     printf(ANSI_COLOR_MAGENTA "\nTotal Applcation Memory Usage : %u Bytes\n"
         ANSI_COLOR_RESET, total_memory_in_use_by_application);
 
-    printf(ANSI_COLOR_MAGENTA "# Of VM Pages in Use : %u\n" ANSI_COLOR_RESET,
-        cumulative_vm_pages_claimed_from_kernel);
+    printf(ANSI_COLOR_MAGENTA "# Of VM Pages in Use : %u (%lu Bytes)\n" \
+        ANSI_COLOR_RESET,
+        cumulative_vm_pages_claimed_from_kernel, 
+        SYSTEM_PAGE_SIZE * cumulative_vm_pages_claimed_from_kernel);
 
     float memory_app_use_to_total_memory_ratio = 0.0;
     
     if(cumulative_vm_pages_claimed_from_kernel){
         memory_app_use_to_total_memory_ratio = 
-        (total_memory_in_use_by_application * 100)/\
-        (cumulative_vm_pages_claimed_from_kernel * SYSTEM_PAGE_SIZE);
+        (float)(total_memory_in_use_by_application * 100)/\
+        (float)(cumulative_vm_pages_claimed_from_kernel * SYSTEM_PAGE_SIZE);
     }
-    printf("Memory In Use Percentage = %f\n", memory_app_use_to_total_memory_ratio);
+    printf(ANSI_COLOR_MAGENTA "Memory In Use by Application = %f%%\n"
+        ANSI_COLOR_RESET,
+        memory_app_use_to_total_memory_ratio);
+
     printf("Total Memory being used by Memory Manager = %lu Bytes\n",
         ((cumulative_vm_pages_claimed_from_kernel *\
         SYSTEM_PAGE_SIZE) + 

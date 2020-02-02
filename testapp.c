@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "mm.h"
+#include "uapi_mm.h"
 #include <assert.h>
 
 typedef struct emp_ {
@@ -65,7 +65,7 @@ main(int argc, char **argv){
     mm_print_block_usage();
     #if 1
     student_t *next = NULL;
-    for( ; first; first = next){
+    for( ; first->next; first = next){
         next = first->next;
         xfree(first);
     }
