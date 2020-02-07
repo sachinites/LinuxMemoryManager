@@ -265,8 +265,8 @@ mm_allocate_free_block(
      * except the boundry condition*/
     if(remaining_size < 
         (sizeof(block_meta_data_t) + vm_page_family->struct_size)){
-        printf("Warning : %uB Memory Unusable at page bottom\n", 
-            remaining_size);
+        /*printf("Warning : %uB Memory Unusable at page bottom\n", 
+            remaining_size);*/
         return MM_TRUE;
     }
 

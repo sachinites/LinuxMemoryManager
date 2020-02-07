@@ -51,7 +51,7 @@ main(int argc, char **argv){
     int i = 0;
     student_t *stud = NULL, *prev = NULL;
     student_t *first = NULL;
-    for( ; i < 120; i++){
+    for( ; i < 1120; i++){
         stud = xcalloc("student_t", 1);
         if(i == 0)
             first = stud;
@@ -64,10 +64,13 @@ main(int argc, char **argv){
     mm_print_memory_usage();
     mm_print_block_usage();
     #if 1
+    i = 0;
     student_t *next = NULL;
-    for( ; first->next; first = next){
+    for( ; first; first = next){
         next = first->next;
+        if(1 || i%4 == 0)
         xfree(first);
+        i++;
     }
     mm_print_memory_usage();
     mm_print_block_usage();
