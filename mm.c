@@ -28,7 +28,6 @@
  * =====================================================================================
  */
 
-#include "mm.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -36,28 +35,31 @@
 #include <unistd.h> /*for getpagesize, brk(), sbrk()*/
 #include <errno.h>
 #include "css.h"
+#include "mm.h"
 
-static vm_page_family_t *first_vm_page_family = NULL;
-static size_t SYSTEM_PAGE_SIZE = 0;
-void *heap_segment_start = NULL;
+/*Library Globals*/
+void          *gb_heap_segment_start = NULL;
+size_t         GB_SYSTEM_PAGE_SIZE = 0;
+uint32_t       gb_no_of_vm_families_registered = 0;
+void          *gb_hsba = NULL; /*Heap Segment Start for Block Allocation*/
 
 void
 mm_init(){
 
-    SYSTEM_PAGE_SIZE = getpagesize();
-    heap_segment_start = sbrk(0);
-    if(!heap_segment_start){
+    GB_SYSTEM_PAGE_SIZE = getpagesize();
+    gb_heap_segment_start = sbrk(0);
+    if(!gb_heap_segment_start){
         printf("Heap Memory Instantiation Failed\n");
         assert(0);
     }
 }
 
 vm_page_t *
-mm_get_available_page_from_heap_segment(const void *heap_segment_start){
+mm_get_available_page_from_heap_segment(){
 
     vm_page_t *vm_page_curr = NULL;
 
-    vm_page_t *first_vm_page = (vm_page_t *)heap_segment_start;
+    vm_page_t *first_vm_page = (vm_page_t *)gb_hsba;
 
     ITERATE_HEAP_SEGMENT_PAGE_WISE_BEGIN(first_vm_page, vm_page_curr){
 
@@ -67,11 +69,18 @@ mm_get_available_page_from_heap_segment(const void *heap_segment_start){
     }ITERATE_HEAP_SEGMENT_PAGE_WISE_END(first_vm_page, vm_page_curr);
     
     /*No free Page could be found, expand heap segment*/
-    vm_page_curr = (vm_page_t *)sbrk(SYSTEM_PAGE_SIZE);
+    void *initial_break = sbrk(0);
+    vm_page_curr = (vm_page_t *)sbrk(GB_SYSTEM_PAGE_SIZE);
 
     if(!vm_page_curr){
         printf("Error : Heap Segment Expansion Failed, error no = %d\n", errno);
+        return 0;
     }
+
+    printf("Heap Segment Expanded. New diff = %lu, page units from gb_hsba = %ld, new sbrk = %p\n",
+        (unsigned long)sbrk(0) - (unsigned long)initial_break,
+        ((unsigned long)sbrk(0) - (unsigned long)gb_hsba)/GB_SYSTEM_PAGE_SIZE,
+        sbrk(0));
     return vm_page_curr;
 }
 
@@ -79,7 +88,7 @@ static inline uint32_t
 mm_max_page_allocatable_memory(){
 
     return (uint32_t)
-        (SYSTEM_PAGE_SIZE - offset_of(vm_page_t, page_memory));
+        (GB_SYSTEM_PAGE_SIZE - offset_of(vm_page_t, page_memory));
 }
 
 #define MAX_PAGE_ALLOCATABLE_MEMORY \
@@ -94,7 +103,7 @@ mm_get_available_page_index(vm_page_family_t *vm_page_family){
     if(!vm_page_family->first_page)
         return NULL;
 
-    ITERATE_VM_PAGE_BEGIN(vm_page_family, curr){
+    ITERATE_VM_PAGE_PER_FAMILY_BEGIN(vm_page_family, curr){
 
         if((int)(curr->page_index) == page_index + 1){
             page_index++;
@@ -102,7 +111,7 @@ mm_get_available_page_index(vm_page_family_t *vm_page_family){
             continue;
         }
         return curr->prev;
-    } ITERATE_VM_PAGE_END(vm_page_family, curr)
+    } ITERATE_VM_PAGE_PER_FAMILY_END(vm_page_family, curr)
 
     return prev;
 }
@@ -115,7 +124,7 @@ allocate_vm_page(vm_page_family_t *vm_page_family){
         mm_get_available_page_index(vm_page_family);
 
     vm_page_t *vm_page = 
-        mm_get_available_page_from_heap_segment(heap_segment_start);
+        mm_get_available_page_from_heap_segment();
 
     vm_page->block_meta_data.is_free = MM_TRUE;
     vm_page->block_meta_data.block_size = 
@@ -144,64 +153,54 @@ allocate_vm_page(vm_page_family_t *vm_page_family){
     vm_page->page_index = prev_page->page_index + 1;
     return vm_page;
 }
-
-
 void
 mm_instantiate_new_page_family(
     char *struct_name,
     uint32_t struct_size){
 
-    if(struct_size > SYSTEM_PAGE_SIZE){
+    vm_page_family_t *vm_page_family = NULL;
+    static size_t remaining_bytes_in_a_page = 0;
+
+    if(struct_size > GB_SYSTEM_PAGE_SIZE){
         printf("Error : %s() Structure Size exceeds system page size\n",
             __FUNCTION__);
         return;
     }
 
-    if(!first_vm_page_family){
-        first_vm_page_family = calloc(1, sizeof(vm_page_family_t));
-        strncpy(first_vm_page_family->struct_name, struct_name,
-            MM_MAX_STRUCT_NAME);
-        first_vm_page_family->struct_size = struct_size;
-        first_vm_page_family->first_page = NULL;
-        first_vm_page_family->next = NULL;
-        first_vm_page_family->prev = NULL;
-        init_glthread(&first_vm_page_family->free_block_priority_list_head);
-        return;
+    if(!gb_no_of_vm_families_registered){
+        
+        vm_page_family = (vm_page_family_t *)sbrk(GB_SYSTEM_PAGE_SIZE);
+        remaining_bytes_in_a_page = GB_SYSTEM_PAGE_SIZE - sizeof(vm_page_family_t);
+        gb_hsba = (void *)
+            ((char *)vm_page_family + GB_SYSTEM_PAGE_SIZE);
     }
+    else if(remaining_bytes_in_a_page >= sizeof(vm_page_family_t)){
+        
+        vm_page_family = (vm_page_family_t *)((char *)gb_heap_segment_start + \
+            GB_SYSTEM_PAGE_SIZE - remaining_bytes_in_a_page);
 
-    vm_page_family_t *vm_page_family_curr;
-
-    ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_family, vm_page_family_curr){
-
-        if(strncmp(vm_page_family_curr->struct_name, 
-            struct_name, 
-            MM_MAX_STRUCT_NAME) != 0){
-            
-            continue;
-        }
-        /*Page family already exists*/
-        assert(0);
-    } ITERATE_PAGE_FAMILIES_END(first_vm_page_family, vm_page_family_curr);
-
-    /*Page family do not exist, create a new one*/
-    vm_page_family_curr = calloc(1, sizeof(vm_page_family_t));
-    strncpy(vm_page_family_curr->struct_name, struct_name,
-            MM_MAX_STRUCT_NAME);
-    vm_page_family_curr->struct_size = struct_size;
-    vm_page_family_curr->first_page = NULL;
-    init_glthread(&first_vm_page_family->free_block_priority_list_head);
-
-    /*Add new page family to the list of Page families*/
-    vm_page_family_curr->next = first_vm_page_family;
-    first_vm_page_family->prev = vm_page_family_curr;
-    first_vm_page_family = vm_page_family_curr;
+        remaining_bytes_in_a_page -= sizeof(vm_page_family_t);
+    }
+    else{
+        vm_page_family = (vm_page_family_t *)sbrk(GB_SYSTEM_PAGE_SIZE);
+        remaining_bytes_in_a_page = GB_SYSTEM_PAGE_SIZE - sizeof(vm_page_family_t);
+        gb_hsba = (void *)
+            ((char *)vm_page_family + GB_SYSTEM_PAGE_SIZE);
+    }
+    gb_no_of_vm_families_registered++;
+    strncpy(vm_page_family->struct_name, struct_name, MM_MAX_STRUCT_NAME);
+    vm_page_family->struct_size = struct_size;
+    vm_page_family->first_page = NULL;
+    init_glthread(&vm_page_family->free_block_priority_list_head);
 }
 
 vm_page_family_t *
 lookup_page_family_by_name(char *struct_name){
 
     vm_page_family_t *vm_page_family_curr;
-    ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_family, vm_page_family_curr){
+
+    ITERATE_PAGE_FAMILIES_BEGIN(gb_heap_segment_start, 
+        vm_page_family_curr){
 
         if(strncmp(vm_page_family_curr->struct_name,
             struct_name,
@@ -209,7 +208,7 @@ lookup_page_family_by_name(char *struct_name){
 
             return vm_page_family_curr;
         }
-    } ITERATE_PAGE_FAMILIES_END(first_vm_page_family, vm_page_family_curr);
+    }ITERATE_PAGE_FAMILIES_END(gb_heap_segment_start, vm_page_family_curr);
     return NULL;
 }
 
@@ -438,11 +437,40 @@ mm_return_vm_page_to_heap_segment(vm_page_t *vm_page){
     /* If this VM page is the top-most page of Heap Memory
      * Segment, then lower down the heap memory segment.
      * Note that, once you lower down the heap memory segment
-     * this page shall be out allotted valid virtual address 
+     * this page shall be out of allotted valid virtual address 
      * of a process, and any access to it shall result in
      * segmentation fault*/
-    if((void *)vm_page == (void *)((char *)sbrk(0) - SYSTEM_PAGE_SIZE))
-        sbrk(-1 * SYSTEM_PAGE_SIZE);
+    /* Also note that, if the VM page is the top-most page of Heap Memory
+     * then it could be possible there are free contiguous pages below
+     * this VM page. We need to lowered down break pointer freeing all
+     * contiguous VM pages lying below this VM page*/
+    if((void *)vm_page != 
+            (void *)((char *)sbrk(0) - GB_SYSTEM_PAGE_SIZE)){
+        return;
+    }
+
+    vm_page_t *bottom_most_free_page = NULL;
+
+    for(bottom_most_free_page = 
+            MM_GET_NEXT_PAGE_IN_HEAP_SEGMENT(vm_page, '-');
+        mm_is_vm_page_empty(bottom_most_free_page);
+        bottom_most_free_page = 
+            MM_GET_NEXT_PAGE_IN_HEAP_SEGMENT(bottom_most_free_page, '-')){
+        
+        if((void *)bottom_most_free_page == gb_hsba)
+            break;
+    }
+
+    if((void *)bottom_most_free_page != gb_hsba){
+        bottom_most_free_page = 
+            MM_GET_NEXT_PAGE_IN_HEAP_SEGMENT(bottom_most_free_page, '+');
+    }
+
+    printf("No of Contiguous pages to be freed from Heap Segment = %lu\n",
+        ((char *)vm_page - (char *)bottom_most_free_page)/GB_SYSTEM_PAGE_SIZE);
+
+    /*Now lower down the break pointer*/
+    assert(!brk((void *)bottom_most_free_page));
 }
 
 void
@@ -519,8 +547,11 @@ xfree(void *app_data){
 
     block_meta_data_t *block_meta_data = 
         (block_meta_data_t *)((char *)app_data - sizeof(block_meta_data_t));
-    
-    assert(block_meta_data->is_free == MM_FALSE);
+   
+    if(block_meta_data->is_free == MM_TRUE){
+        printf("!Double Free detected\n");
+        assert(0);
+    }
     mm_free_blocks(block_meta_data);
 }
 
@@ -539,7 +570,7 @@ mm_is_vm_page_empty(vm_page_t *vm_page){
 void
 mm_print_vm_page_details(vm_page_t *vm_page, uint32_t i){
 
-    printf("\tPage Index : %u \n", vm_page->page_index);
+    printf("\tPage Index : %u , address = %p\n", vm_page->page_index, vm_page);
     printf("\t\t next = %p, prev = %p\n", vm_page->next, vm_page->prev);
     printf("\t\t page family = %s\n", vm_page->pg_family->struct_name);
 
@@ -567,9 +598,9 @@ mm_print_memory_usage(){
     uint32_t total_memory_in_use_by_application = 0;
     uint32_t cumulative_vm_pages_claimed_from_kernel = 0;
 
-    printf("\nPage Size = %zu Bytes\n", SYSTEM_PAGE_SIZE);
+    printf("\nPage Size = %zu Bytes\n", GB_SYSTEM_PAGE_SIZE);
 
-    ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_family, vm_page_family_curr){
+    ITERATE_PAGE_FAMILIES_BEGIN(gb_heap_segment_start, vm_page_family_curr){
 
         number_of_struct_families++;
 
@@ -588,32 +619,32 @@ mm_print_memory_usage(){
 
         i = 0;
 
-        ITERATE_VM_PAGE_BEGIN(vm_page_family_curr, vm_page){
+        ITERATE_VM_PAGE_PER_FAMILY_BEGIN(vm_page_family_curr, vm_page){
       
             cumulative_vm_pages_claimed_from_kernel++;
             mm_print_vm_page_details(vm_page, i++);
 
-        } ITERATE_VM_PAGE_END(vm_page_family_curr, vm_page);
+        } ITERATE_VM_PAGE_PER_FAMILY_END(vm_page_family_curr, vm_page);
         printf("\n");
-    } ITERATE_PAGE_FAMILIES_END(first_vm_page_family, vm_page_family_curr);
+    } ITERATE_PAGE_FAMILIES_END(gb_heap_segment_start, vm_page_family_curr);
 
     printf(ANSI_COLOR_MAGENTA "\nTotal Applcation Memory Usage : %u Bytes\n"
         ANSI_COLOR_RESET, total_memory_in_use_by_application);
 
     printf(ANSI_COLOR_MAGENTA "# Of VM Pages in Use : %u (%lu Bytes).\n" \
-        "Heap Segment Start ptr = %p, sbrk(0) = %p diff = %lu\n" \
+        "Heap Segment Start ptr = %p, sbrk(0) = %p , gb_hsba = %p, diff = %lu\n" \
         ANSI_COLOR_RESET,
         cumulative_vm_pages_claimed_from_kernel, 
-        SYSTEM_PAGE_SIZE * cumulative_vm_pages_claimed_from_kernel,
-        heap_segment_start, sbrk(0),
-        (unsigned long)sbrk(0) - (unsigned long)heap_segment_start);
+        GB_SYSTEM_PAGE_SIZE * cumulative_vm_pages_claimed_from_kernel,
+        gb_heap_segment_start, sbrk(0), gb_hsba,
+        (unsigned long)sbrk(0) - (unsigned long)gb_hsba);
 
     float memory_app_use_to_total_memory_ratio = 0.0;
     
     if(cumulative_vm_pages_claimed_from_kernel){
         memory_app_use_to_total_memory_ratio = 
         (float)(total_memory_in_use_by_application * 100)/\
-        (float)(cumulative_vm_pages_claimed_from_kernel * SYSTEM_PAGE_SIZE);
+        (float)(cumulative_vm_pages_claimed_from_kernel * GB_SYSTEM_PAGE_SIZE);
     }
     printf(ANSI_COLOR_MAGENTA "Memory In Use by Application = %f%%\n"
         ANSI_COLOR_RESET,
@@ -621,7 +652,7 @@ mm_print_memory_usage(){
 
     printf("Total Memory being used by Memory Manager = %lu Bytes\n",
         ((cumulative_vm_pages_claimed_from_kernel *\
-        SYSTEM_PAGE_SIZE) + 
+        GB_SYSTEM_PAGE_SIZE) + 
         (number_of_struct_families * sizeof(vm_page_family_t))));
 }
 
@@ -635,13 +666,13 @@ mm_print_block_usage(){
              occupied_block_count;
     uint32_t application_memory_usage;
 
-    ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_family, vm_page_family_curr){
+    ITERATE_PAGE_FAMILIES_BEGIN(gb_heap_segment_start, vm_page_family_curr){
 
         total_block_count = 0;
         free_block_count = 0;
         application_memory_usage = 0;
         occupied_block_count = 0;
-        ITERATE_VM_PAGE_BEGIN(vm_page_family_curr, vm_page_curr){
+        ITERATE_VM_PAGE_PER_FAMILY_BEGIN(vm_page_family_curr, vm_page_curr){
 
             ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page_curr, block_meta_data_curr){
         
@@ -656,11 +687,11 @@ mm_print_block_usage(){
                     occupied_block_count++;
                 }
             } ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_curr, block_meta_data_curr);
-        } ITERATE_VM_PAGE_END(vm_page_family_curr, vm_page_curr);
+        } ITERATE_VM_PAGE_PER_FAMILY_END(vm_page_family_curr, vm_page_curr);
 
     printf("%-20s   TBC : %-4u    FBC : %-4u    OBC : %-4u AppMemUsage : %u\n",
         vm_page_family_curr->struct_name, total_block_count,
         free_block_count, occupied_block_count, application_memory_usage);
 
-    } ITERATE_PAGE_FAMILIES_END(first_vm_page_family, vm_page_family_curr); 
+    } ITERATE_PAGE_FAMILIES_END(gb_heap_segment_start, vm_page_family_curr); 
 }
