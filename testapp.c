@@ -22,8 +22,8 @@ int
 main(int argc, char **argv){
 
     mm_init();
-    mm_instantiate_new_page_family("emp_t", sizeof(emp_t));
-    mm_instantiate_new_page_family("student_t", sizeof(student_t));
+    MM_REG_STRUCT(emp_t);
+    MM_REG_STRUCT(student_t);
 #if 0
     emp_t *emp1 = xcalloc("emp_t", 1);
     emp_t *emp2 = xcalloc("emp_t", 1);
@@ -51,7 +51,7 @@ main(int argc, char **argv){
     int i = 0;
     student_t *stud = NULL, *prev = NULL;
     student_t *first = NULL;
-    for( ; i < 1120; i++){
+    for( ; i < 120; i++){
         stud = xcalloc("student_t", 1);
         if(i == 0)
             first = stud;
@@ -61,8 +61,8 @@ main(int argc, char **argv){
         }
         prev = stud;
     }
-    mm_print_memory_usage();
-    mm_print_block_usage();
+    //mm_print_memory_usage();
+    //mm_print_block_usage();
     #if 1
     i = 0;
     student_t *next = NULL;
@@ -72,8 +72,8 @@ main(int argc, char **argv){
         xfree(first);
         i++;
     }
-    mm_print_memory_usage();
-    mm_print_block_usage();
+    //mm_print_memory_usage();
+    //mm_print_block_usage();
     #endif
     return 0;
 }

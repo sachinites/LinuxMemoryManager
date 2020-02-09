@@ -53,36 +53,48 @@ mm_init(){
         assert(0);
     }
 }
-
+#if 1
 vm_page_t *
 mm_get_available_page_from_heap_segment(){
 
     vm_page_t *vm_page_curr = NULL;
-
+#if 1
     vm_page_t *first_vm_page = (vm_page_t *)gb_hsba;
 
     ITERATE_HEAP_SEGMENT_PAGE_WISE_BEGIN(first_vm_page, vm_page_curr){
-
         if(mm_is_vm_page_empty(vm_page_curr)){
             return vm_page_curr;
         }
     }ITERATE_HEAP_SEGMENT_PAGE_WISE_END(first_vm_page, vm_page_curr);
-    
+#endif
     /*No free Page could be found, expand heap segment*/
-    void *initial_break = sbrk(0);
+    
     vm_page_curr = (vm_page_t *)sbrk(GB_SYSTEM_PAGE_SIZE);
 
     if(!vm_page_curr){
         printf("Error : Heap Segment Expansion Failed, error no = %d\n", errno);
         return 0;
     }
-
+#if 0
     printf("Heap Segment Expanded. New diff = %lu, page units from gb_hsba = %ld, new sbrk = %p\n",
         (unsigned long)sbrk(0) - (unsigned long)initial_break,
         ((unsigned long)sbrk(0) - (unsigned long)gb_hsba)/GB_SYSTEM_PAGE_SIZE,
         sbrk(0));
+#endif
     return vm_page_curr;
 }
+#endif
+
+#if 0
+vm_page_t *
+mm_get_available_page_from_heap_segment(){
+
+    vm_page_t *vm_page_curr = NULL;
+    /*No free Page could be found, expand heap segment*/
+    vm_page_curr = (vm_page_t *)sbrk(GB_SYSTEM_PAGE_SIZE);
+    return vm_page_curr;
+}
+#endif
 
 static inline uint32_t
 mm_max_page_allocatable_memory(){
@@ -465,10 +477,10 @@ mm_return_vm_page_to_heap_segment(vm_page_t *vm_page){
         bottom_most_free_page = 
             MM_GET_NEXT_PAGE_IN_HEAP_SEGMENT(bottom_most_free_page, '+');
     }
-
+#if 0
     printf("No of Contiguous pages to be freed from Heap Segment = %lu\n",
-        ((char *)vm_page - (char *)bottom_most_free_page)/GB_SYSTEM_PAGE_SIZE);
-
+        (((char *)vm_page - (char *)bottom_most_free_page)/GB_SYSTEM_PAGE_SIZE)+ 1);
+#endif
     /*Now lower down the break pointer*/
     assert(!brk((void *)bottom_most_free_page));
 }
