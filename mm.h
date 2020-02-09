@@ -127,6 +127,11 @@ mm_get_biggest_free_block_page_family(
 vm_page_t *
 allocate_vm_page();
 
+#define MARK_VM_PAGE_EMPTY(vm_page_t_ptr)                                 \
+    vm_page_t_ptr->block_meta_data.next_block = NULL;                     \
+    vm_page_t_ptr->block_meta_data.prev_block = NULL;                     \
+    vm_page_t_ptr->block_meta_data.is_free = MM_TRUE
+
 void
 mm_init();
 
@@ -163,6 +168,19 @@ lookup_page_family_by_name(char *struct_name);
 
 #define ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_ptr, curr)   \
     }}
+
+#define ITERATE_HEAP_SEGMENT_PAGE_WISE_BEGIN(vm_page_begin_ptr, curr)   \
+{                                                               \
+    void *heap_segment_end = sbrk(0);                           \
+    for(curr = (vm_page_t *)vm_page_begin_ptr;                  \
+        (void *)curr != heap_segment_end;                       \
+        curr = (vm_page_t *)((char *)curr + SYSTEM_PAGE_SIZE)){
+
+#define ITERATE_HEAP_SEGMENT_PAGE_WISE_END(vm_page_begin_ptr, curr) \
+    }}   
+
+
+
 
 void mm_vm_page_delete_and_free(vm_page_t *vm_page);
 #endif /**/

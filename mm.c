@@ -33,16 +33,46 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include <unistd.h> /*for getpagesize*/
+#include <unistd.h> /*for getpagesize, brk(), sbrk()*/
+#include <errno.h>
 #include "css.h"
 
 static vm_page_family_t *first_vm_page_family = NULL;
 static size_t SYSTEM_PAGE_SIZE = 0;
+void *heap_segment_start = NULL;
 
 void
 mm_init(){
 
     SYSTEM_PAGE_SIZE = getpagesize();
+    heap_segment_start = sbrk(0);
+    if(!heap_segment_start){
+        printf("Heap Memory Instantiation Failed\n");
+        assert(0);
+    }
+}
+
+vm_page_t *
+mm_get_available_page_from_heap_segment(const void *heap_segment_start){
+
+    vm_page_t *vm_page_curr = NULL;
+
+    vm_page_t *first_vm_page = (vm_page_t *)heap_segment_start;
+
+    ITERATE_HEAP_SEGMENT_PAGE_WISE_BEGIN(first_vm_page, vm_page_curr){
+
+        if(mm_is_vm_page_empty(vm_page_curr)){
+            return vm_page_curr;
+        }
+    }ITERATE_HEAP_SEGMENT_PAGE_WISE_END(first_vm_page, vm_page_curr);
+    
+    /*No free Page could be found, expand heap segment*/
+    vm_page_curr = (vm_page_t *)sbrk(SYSTEM_PAGE_SIZE);
+
+    if(!vm_page_curr){
+        printf("Error : Heap Segment Expansion Failed, error no = %d\n", errno);
+    }
+    return vm_page_curr;
 }
 
 static inline uint32_t
@@ -84,7 +114,9 @@ allocate_vm_page(vm_page_family_t *vm_page_family){
     vm_page_t *prev_page = 
         mm_get_available_page_index(vm_page_family);
 
-    vm_page_t *vm_page = calloc(1, SYSTEM_PAGE_SIZE);
+    vm_page_t *vm_page = 
+        mm_get_available_page_from_heap_segment(heap_segment_start);
+
     vm_page->block_meta_data.is_free = MM_TRUE;
     vm_page->block_meta_data.block_size = 
         MAX_PAGE_ALLOCATABLE_MEMORY;
@@ -398,6 +430,21 @@ mm_union_free_blocks(block_meta_data_t *first,
     mm_bind_blocks_for_deallocation(first, second);
 }
 
+static void
+mm_return_vm_page_to_heap_segment(vm_page_t *vm_page){
+
+    MARK_VM_PAGE_EMPTY(vm_page);
+
+    /* If this VM page is the top-most page of Heap Memory
+     * Segment, then lower down the heap memory segment.
+     * Note that, once you lower down the heap memory segment
+     * this page shall be out allotted valid virtual address 
+     * of a process, and any access to it shall result in
+     * segmentation fault*/
+    if((void *)vm_page == (void *)((char *)sbrk(0) - SYSTEM_PAGE_SIZE))
+        sbrk(-1 * SYSTEM_PAGE_SIZE);
+}
+
 void
 mm_vm_page_delete_and_free(
         vm_page_t *vm_page){
@@ -412,7 +459,7 @@ mm_vm_page_delete_and_free(
         if(vm_page->next)
             vm_page->next->prev = NULL;
         vm_page_family->no_of_system_calls_to_alloc_dealloc_vm_pages++;
-        free(vm_page);
+        mm_return_vm_page_to_heap_segment(vm_page);
         return;
     }
 
@@ -420,7 +467,7 @@ mm_vm_page_delete_and_free(
         vm_page->next->prev = vm_page->prev;
     vm_page->prev->next = vm_page->next;
     vm_page_family->no_of_system_calls_to_alloc_dealloc_vm_pages++;
-    free(vm_page);
+    mm_return_vm_page_to_heap_segment(vm_page);
 }
 
 static block_meta_data_t *
@@ -553,10 +600,13 @@ mm_print_memory_usage(){
     printf(ANSI_COLOR_MAGENTA "\nTotal Applcation Memory Usage : %u Bytes\n"
         ANSI_COLOR_RESET, total_memory_in_use_by_application);
 
-    printf(ANSI_COLOR_MAGENTA "# Of VM Pages in Use : %u (%lu Bytes)\n" \
+    printf(ANSI_COLOR_MAGENTA "# Of VM Pages in Use : %u (%lu Bytes).\n" \
+        "Heap Segment Start ptr = %p, sbrk(0) = %p diff = %lu\n" \
         ANSI_COLOR_RESET,
         cumulative_vm_pages_claimed_from_kernel, 
-        SYSTEM_PAGE_SIZE * cumulative_vm_pages_claimed_from_kernel);
+        SYSTEM_PAGE_SIZE * cumulative_vm_pages_claimed_from_kernel,
+        heap_segment_start, sbrk(0),
+        (unsigned long)sbrk(0) - (unsigned long)heap_segment_start);
 
     float memory_app_use_to_total_memory_ratio = 0.0;
     
