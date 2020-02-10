@@ -701,9 +701,9 @@ mm_print_block_usage(){
             } ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page_curr, block_meta_data_curr);
         } ITERATE_VM_PAGE_PER_FAMILY_END(vm_page_family_curr, vm_page_curr);
 
-    printf("%-20s   TBC : %-4u    FBC : %-4u    OBC : %-4u AppMemUsage : %u\n",
-        vm_page_family_curr->struct_name, total_block_count,
-        free_block_count, occupied_block_count, application_memory_usage);
-
+        printf("%-20s   TBC : %-4u    FBC : %-4u    OBC : %-4u AppMemUsage : %u\n",
+            vm_page_family_curr->struct_name, total_block_count,
+            free_block_count, occupied_block_count, application_memory_usage);
+    
     } ITERATE_PAGE_FAMILIES_END(gb_heap_segment_start, vm_page_family_curr); 
 }

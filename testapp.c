@@ -61,8 +61,8 @@ main(int argc, char **argv){
         }
         prev = stud;
     }
-    //mm_print_memory_usage();
-    //mm_print_block_usage();
+    mm_print_memory_usage();
+    mm_print_block_usage();
     #if 1
     i = 0;
     student_t *next = NULL;
@@ -72,8 +72,8 @@ main(int argc, char **argv){
         xfree(first);
         i++;
     }
-    //mm_print_memory_usage();
-    //mm_print_block_usage();
+    mm_print_memory_usage();
+    mm_print_block_usage();
     #endif
     return 0;
 }
