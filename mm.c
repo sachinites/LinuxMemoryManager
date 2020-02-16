@@ -413,7 +413,7 @@ xcalloc(char *struct_name, int units){
                     &pg_family->first_page->block_meta_data, 
                     units * pg_family->struct_size)){
             memset((char *)pg_family->first_page->page_memory, 0,
-                sizeof(units * pg_family->struct_size));
+                units * pg_family->struct_size);
             return (void *)pg_family->first_page->page_memory;
         }
     }
