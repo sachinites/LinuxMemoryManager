@@ -153,6 +153,9 @@ allocate_vm_page(vm_page_family_t *vm_page_family){
 
     if(!prev_page){
         vm_page->page_index = 0;
+        vm_page->next = vm_page_family->first_page;
+        if(vm_page_family->first_page)
+            vm_page_family->first_page->prev = vm_page;
         vm_page_family->first_page = vm_page;
         return vm_page;
     }
@@ -409,7 +412,8 @@ xcalloc(char *struct_name, int units){
         if(mm_allocate_free_block(pg_family, 
                     &pg_family->first_page->block_meta_data, 
                     units * pg_family->struct_size)){
-
+            memset((char *)pg_family->first_page->page_memory, 0,
+                sizeof(units * pg_family->struct_size));
             return (void *)pg_family->first_page->page_memory;
         }
     }
@@ -420,9 +424,17 @@ xcalloc(char *struct_name, int units){
     vm_page_t *vm_page_curr = mm_get_page_satisfying_request(
                         pg_family, units * pg_family->struct_size,
                         &free_block_meta_data);
-
-    if(free_block_meta_data)
+    
+    if(free_block_meta_data){
+        /*Sanity Checks*/
+        if(free_block_meta_data->is_free == MM_TRUE ||
+                !IS_GLTHREAD_LIST_EMPTY(&free_block_meta_data->priority_thread_glue)){
+            assert(0);
+        }
+        memset((char *)(free_block_meta_data + 1), 0, 
+            free_block_meta_data->block_size);
         return  (void *)(free_block_meta_data + 1);
+    }
 
     return NULL;
 }
@@ -689,6 +701,17 @@ mm_print_block_usage(){
             ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page_curr, block_meta_data_curr){
         
                 total_block_count++;
+                
+                /*Sanity Checks*/
+                if(block_meta_data_curr->is_free == MM_FALSE){
+                    assert(IS_GLTHREAD_LIST_EMPTY(&block_meta_data_curr->\
+                                priority_thread_glue));
+                }
+                if(block_meta_data_curr->is_free == MM_TRUE){
+                    assert(!IS_GLTHREAD_LIST_EMPTY(&block_meta_data_curr->\
+                                priority_thread_glue));
+                }
+
                 if(block_meta_data_curr->is_free == MM_TRUE){
                     free_block_count++;
                 }
