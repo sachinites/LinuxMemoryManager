@@ -613,7 +613,7 @@ mm_print_vm_page_details(vm_page_t *vm_page, uint32_t i){
 }
 
 void
-mm_print_memory_usage(){
+mm_print_memory_usage(char *struct_name){
 
     uint32_t i = 0;
     vm_page_t *vm_page = NULL;
@@ -625,6 +625,13 @@ mm_print_memory_usage(){
     printf("\nPage Size = %zu Bytes\n", GB_SYSTEM_PAGE_SIZE);
 
     ITERATE_PAGE_FAMILIES_BEGIN(gb_heap_segment_start, vm_page_family_curr){
+        
+        if(struct_name){
+            if(strncmp(struct_name, vm_page_family_curr->struct_name,
+                        strlen(vm_page_family_curr->struct_name))){
+                continue;
+            }
+        }
 
         number_of_struct_families++;
 

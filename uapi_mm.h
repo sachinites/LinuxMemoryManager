@@ -50,7 +50,7 @@ mm_instantiate_new_page_family(
  */
 
 /*Printing Functions*/
-void mm_print_memory_usage();
+void mm_print_memory_usage(char *struct_name);
 void mm_print_block_usage();
 
 /*Initialization Functions*/
