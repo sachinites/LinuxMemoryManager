@@ -239,7 +239,7 @@ mm_instantiate_new_page_family(
     vm_page_family_t *vm_page_family_curr = NULL;
     vm_page_for_families_t *new_vm_page_for_families = NULL;
 
-    if(struct_size > SYSTEM_PAGE_SIZE){
+    if(struct_size > mm_max_page_allocatable_memory(1)){
         printf("Error : %s() Structure %s Size exceeds system page size\n",
             __FUNCTION__, struct_name);
         return;
@@ -759,4 +759,27 @@ mm_print_block_usage(){
         free_block_count, occupied_block_count, application_memory_usage);
 
     } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr); 
+}
+
+void
+mm_print_registered_page_families(){
+
+    vm_page_family_t *vm_page_family_curr = NULL;
+    vm_page_for_families_t *vm_page_for_families_curr = NULL;
+
+    for(vm_page_for_families_curr = first_vm_page_for_families; 
+        vm_page_for_families_curr; 
+        vm_page_for_families_curr = vm_page_for_families_curr->next){
+
+        ITERATE_PAGE_FAMILIES_BEGIN(vm_page_for_families_curr, 
+            vm_page_family_curr){
+
+
+            printf("Page Family : %s, Size = %u\n", 
+                vm_page_family_curr->struct_name,
+                vm_page_family_curr->struct_size);
+
+        } ITERATE_PAGE_FAMILIES_END(vm_page_for_families_curr,
+            vm_page_family_curr);
+    }
 }

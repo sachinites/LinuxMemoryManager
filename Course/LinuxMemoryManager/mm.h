@@ -103,8 +103,6 @@ typedef struct vm_page_family_{
     char struct_name[MM_MAX_STRUCT_NAME];
     uint32_t struct_size;
     vm_page_t *first_page;
-    struct vm_page_family_ *next;
-    struct vm_page_family_ *prev;
     glthread_t free_block_priority_list_head;
     /*Statistics*/
     uint32_t total_memory_in_use_by_app;
@@ -146,9 +144,6 @@ allocate_vm_page();
     ((incr == '+') ? ((vm_page_t *)((char *)vm_page_t_ptr + SYSTEM_PAGE_SIZE)): \
      ((vm_page_t *)((char *)vm_page_t_ptr - SYSTEM_PAGE_SIZE)))
 
-
-void
-mm_init();
 
 #define ITERATE_PAGE_FAMILIES_BEGIN(vm_page_for_families_ptr, curr)       \
 {                                                            \

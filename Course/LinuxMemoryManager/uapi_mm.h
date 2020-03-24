@@ -42,6 +42,7 @@ xfree(void *app_ptr);
 /*Printing Functions*/
 void mm_print_memory_usage(char *struct_name);
 void mm_print_block_usage();
+void mm_print_registered_page_families();
 
 /*Initialization Functions*/
 void
