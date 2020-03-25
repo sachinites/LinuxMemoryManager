@@ -287,16 +287,23 @@ mm_instantiate_new_page_family(
 vm_page_family_t *
 lookup_page_family_by_name(char *struct_name){
 
-    vm_page_family_t *vm_page_family_curr;
-    ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_for_families, vm_page_family_curr){
+    vm_page_family_t *vm_page_family_curr = NULL;
+    vm_page_for_families_t *vm_page_for_families_curr = NULL;
 
-        if(strncmp(vm_page_family_curr->struct_name,
-            struct_name,
-            MM_MAX_STRUCT_NAME) == 0){
+    for(vm_page_for_families_curr = first_vm_page_for_families; 
+            vm_page_for_families_curr; 
+            vm_page_for_families_curr = vm_page_for_families_curr->next){
 
-            return vm_page_family_curr;
-        }
-    } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr);
+        ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_for_families, vm_page_family_curr){
+
+            if(strncmp(vm_page_family_curr->struct_name,
+                        struct_name,
+                        MM_MAX_STRUCT_NAME) == 0){
+
+                return vm_page_family_curr;
+            }
+        } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr);
+    }
     return NULL;
 }
 

@@ -132,8 +132,8 @@ allocate_vm_page();
     vm_page_t_ptr->block_meta_data.is_free = MM_TRUE
 
 #define MM_GET_NEXT_PAGE_IN_HEAP_SEGMENT(vm_page_t_ptr, incr)   \
-    ((incr == '+') ? ((vm_page_t *)((char *)vm_page_t_ptr + SYSTEM_PAGE_SIZE)): \
-                     ((vm_page_t *)((char *)vm_page_t_ptr - SYSTEM_PAGE_SIZE)))
+    ((incr == '+') ? ((vm_page_t *)((char *)vm_page_t_ptr + GB_SYSTEM_PAGE_SIZE)): \
+                     ((vm_page_t *)((char *)vm_page_t_ptr - GB_SYSTEM_PAGE_SIZE)))
 
 void
 mm_init();
