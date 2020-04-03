@@ -44,6 +44,22 @@ mm_return_vm_page_to_kernel (void *vm_page, int units){
     }
 }
 
+static void
+mm_union_free_blocks(block_meta_data_t *first,
+        block_meta_data_t *second){
+
+    assert(first->is_free == MM_TRUE &&
+            second->is_free == MM_TRUE);
+
+    first->block_size += sizeof(block_meta_data_t) +
+        second->block_size;
+
+    first->next_block = second->next_block;
+
+    if(second->next_block)
+        second->next_block->prev_block = first;
+}
+
 void
 mm_instantiate_new_page_family(
     char *struct_name,
