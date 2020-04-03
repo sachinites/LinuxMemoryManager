@@ -89,10 +89,10 @@ typedef struct vm_page_{
     if (free_meta_block->next_block)\
     free_meta_block->next_block->prev_block = free_meta_block
 
-#define mm_bind_blocks_for_deallocation(freed_meta_block_top, freed_meta_block_down)    \
-    freed_meta_block_top->next_block = freed_meta_block_down->next_block;               \
-    if(freed_meta_block_down->next_block)                                               \
-    freed_meta_block_down->next_block->prev_block = freed_meta_block_top
+#define mm_bind_blocks_for_deallocation(freed_meta_block_down, freed_meta_block_top)    \
+    freed_meta_block_down->next_block = freed_meta_block_top->next_block;               \
+    if(freed_meta_block_top->next_block)                                                \
+    freed_meta_block_top->next_block->prev_block = freed_meta_block_down
 
 vm_bool_t
 mm_is_vm_page_empty(vm_page_t *vm_page);
