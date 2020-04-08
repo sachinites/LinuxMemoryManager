@@ -60,6 +60,97 @@ mm_union_free_blocks(block_meta_data_t *first,
         second->next_block->prev_block = first;
 }
 
+static inline uint32_t
+mm_max_page_allocatable_memory (int units){
+
+    return (uint32_t)
+        ((SYSTEM_PAGE_SIZE * units) - \
+         offset_of(vm_page_t, page_memory));
+}
+
+vm_page_t *
+allocate_vm_page(vm_page_family_t *vm_page_family){
+
+    vm_page_t *vm_page = mm_get_new_vm_page_from_kernel(1);
+   
+    /*Initialize lower most Meta block of the VM page*/
+    MARK_VM_PAGE_EMPTY(vm_page);
+
+    vm_page->block_meta_data.block_size =
+        mm_max_page_allocatable_memory(1);
+    vm_page->block_meta_data.offset =
+        offset_of(vm_page_t, block_meta_data);
+
+    vm_page->next = NULL;
+    vm_page->prev = NULL;
+
+    /*Set the back pointer to page family*/
+    vm_page->pg_family = vm_page_family;
+
+    /*If it is a first VM data page for a given
+     * page family*/
+    if(!vm_page_family->first_page){
+        vm_page_family->first_page = vm_page;
+        return vm_page;
+    }
+
+    /* Insert new VM page to the head of the linked 
+     * list*/
+    vm_page->next = vm_page_family->first_page;
+    vm_page_family->first_page->prev = vm_page;
+    return vm_page;
+}
+
+void
+mm_vm_page_delete_and_free(
+        vm_page_t *vm_page){
+
+    vm_page_family_t *vm_page_family =
+        vm_page->pg_family;
+
+    /*If the page being deleted is the head of the linked 
+     * list*/
+    if(vm_page_family->first_page == vm_page){
+        vm_page_family->first_page = vm_page->next;
+        if(vm_page->next)
+            vm_page->next->prev = NULL;
+        vm_page->next = NULL;
+        vm_page->prev = NULL;
+        mm_return_vm_page_to_kernel((void *)vm_page, 1);
+        return;
+    }
+
+    /*If we are deleting the page from middle or end of 
+     * linked list*/
+    if(vm_page->next)
+        vm_page->next->prev = vm_page->prev;
+    vm_page->prev->next = vm_page->next;
+    mm_return_vm_page_to_kernel((void *)vm_page, 1);
+}
+
+void
+mm_print_vm_page_details(vm_page_t *vm_page){
+
+    printf("\t\t next = %p, prev = %p\n", vm_page->next, vm_page->prev);
+    printf("\t\t page family = %s\n", vm_page->pg_family->struct_name);
+
+    uint32_t j = 0;
+    block_meta_data_t *curr;
+    ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page, curr){
+
+        printf("\t\t\t%-14p Block %-3u %s  block_size = %-6u  "
+                "offset = %-6u  prev = %-14p  next = %p\n",
+                curr,
+                j++, curr->is_free ? "F R E E D" : "ALLOCATED",
+                curr->block_size, curr->offset,
+                curr->prev_block,
+                curr->next_block);
+    } ITERATE_VM_PAGE_ALL_BLOCKS_END(vm_page, curr);
+}
+
+
+
+
 void
 mm_instantiate_new_page_family(
     char *struct_name,
