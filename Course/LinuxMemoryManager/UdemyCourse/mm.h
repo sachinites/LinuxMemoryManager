@@ -31,6 +31,7 @@
 #ifndef __MM__
 #define __MM__
 
+#include "gluethread/glthread.h"
 #include <stdint.h> /*uint32_t*/
 
 typedef enum{
@@ -44,9 +45,12 @@ typedef struct block_meta_data_{
     vm_bool_t is_free;
     uint32_t block_size;
     uint32_t offset;    /*offset from the start of the page*/
+    glthread_t priority_thread_glue;
     struct block_meta_data_ *prev_block;
     struct block_meta_data_ *next_block;
 } block_meta_data_t;
+GLTHREAD_TO_STRUCT(glthread_to_block_meta_data,
+    block_meta_data_t, priority_thread_glue, glthread_ptr);
 
 #define offset_of(container_structure, field_name)  \
     ((size_t)&(((container_structure *)0)->field_name))
@@ -91,6 +95,7 @@ typedef struct vm_page_family_{
     char struct_name[MM_MAX_STRUCT_NAME];
     uint32_t struct_size;
     vm_page_t *first_page;
+    glthread_t free_block_priority_list_head;
 } vm_page_family_t;
 
 typedef struct vm_page_for_families_{

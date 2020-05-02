@@ -80,7 +80,7 @@ allocate_vm_page(vm_page_family_t *vm_page_family){
         mm_max_page_allocatable_memory(1);
     vm_page->block_meta_data.offset =
         offset_of(vm_page_t, block_meta_data);
-    init_glthread(&vm_page->block_meta_data.priority_thread_glue);
+
     vm_page->next = NULL;
     vm_page->prev = NULL;
 
@@ -176,8 +176,6 @@ mm_instantiate_new_page_family(
         strncpy(first_vm_page_for_families->vm_page_family[0].struct_name, 
         struct_name, MM_MAX_STRUCT_NAME);
         first_vm_page_for_families->vm_page_family[0].struct_size = struct_size;
-        first_vm_page_for_families->vm_page_family[0].first_page = NULL;
-        init_glthread(&first_vm_page_for_families->vm_page_family[0].free_block_priority_list_head);
         return;
     }
 
@@ -201,13 +199,12 @@ mm_instantiate_new_page_family(
             (vm_page_for_families_t *)mm_get_new_vm_page_from_kernel(1);
         new_vm_page_for_families->next = first_vm_page_for_families;
         first_vm_page_for_families = new_vm_page_for_families;
+        vm_page_family_curr = &first_vm_page_for_families->vm_page_family[0];
     }
 
     strncpy(vm_page_family_curr->struct_name, struct_name,
             MM_MAX_STRUCT_NAME);
     vm_page_family_curr->struct_size = struct_size;
-    vm_page_family_curr->first_page = NULL;
-    init_glthread(&vm_page_family_curr->free_block_priority_list_head);
 }
 
 void
@@ -232,35 +229,7 @@ mm_print_registered_page_families(){
     }
 }
 
-static int
-free_blocks_comparison_function(
-        void *_block_meta_data1,
-        void *_block_meta_data2){
 
-    block_meta_data_t *block_meta_data1 =
-        (block_meta_data_t *)_block_meta_data1;
-
-    block_meta_data_t *block_meta_data2 =
-        (block_meta_data_t *)_block_meta_data2;
-
-    if(block_meta_data1->block_size > block_meta_data2->block_size)
-        return -1;
-    else if(block_meta_data1->block_size < block_meta_data2->block_size)
-        return 1;
-    return 0;
-}
-
-static void
-mm_add_free_block_meta_data_to_free_block_list(
-        vm_page_family_t *vm_page_family,
-        block_meta_data_t *free_block){
-
-    assert(free_block->is_free == MM_TRUE);
-    glthread_priority_insert(&vm_page_family->free_block_priority_list_head,
-            &free_block->priority_thread_glue,
-            free_blocks_comparison_function,
-            offset_of(block_meta_data_t, priority_thread_glue));
-}
 
 
 
