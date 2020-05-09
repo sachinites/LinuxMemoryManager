@@ -262,7 +262,60 @@ mm_add_free_block_meta_data_to_free_block_list(
             offset_of(block_meta_data_t, priority_thread_glue));
 }
 
+static vm_page_t *
+mm_family_new_page_add(vm_page_family_t *vm_page_family){
 
+    vm_page_t *vm_page = allocate_vm_page(vm_page_family);
+
+    if(!vm_page)
+        return NULL;
+
+    /* The new page is like one free block, add it to the
+     * free block list*/
+    mm_add_free_block_meta_data_to_free_block_list(
+            vm_page_family, &vm_page->block_meta_data);
+
+    return vm_page;
+}
+
+
+/* The public fn to be invoked by the application for Dynamic
+ * Memory Allocations.*/
+void *
+xcalloc(char *struct_name, int units){
+
+    /*Step 1*/  
+     vm_page_family_t *pg_family =
+             lookup_page_family_by_name(struct_name);
+
+     if(!pg_family){
+
+         printf("Error : Structure %s not registered with Memory Manager\n",
+                 struct_name);
+         return NULL;
+     }
+
+     if(units * pg_family->struct_size > MAX_PAGE_ALLOCATABLE_MEMORY(1)){
+
+         printf("Error : Memory Requested Exceeds Page Size\n");
+         return NULL;
+     }
+
+     if(!pg_family->first_page){
+         /*Step 2.1*/
+         pg_family->first_page = mm_family_new_page_add(pg_family);
+         /*Step 3*/
+         if(mm_allocate_free_block(pg_family,
+                     &pg_family->first_page->block_meta_data,
+                     units * pg_family->struct_size)){
+             memset((char *)pg_family->first_page->page_memory, 0,
+                     units * pg_family->struct_size);
+             return (void *)pg_family->first_page->page_memory;
+         }
+
+
+    return NULL;
+}
 
 
 

@@ -357,15 +357,17 @@ mm_family_new_page_add(vm_page_family_t *vm_page_family){
  * 'size' bytes of application data. Return TRUE if 
  * block allocation succeeds*/
 static vm_bool_t
-mm_allocate_free_block(
+mm_split_free_data_block_for_allocation(
             vm_page_family_t *vm_page_family,
             block_meta_data_t *block_meta_data, 
             uint32_t size){
 
     assert(block_meta_data->is_free == MM_TRUE);
 
-    assert(block_meta_data->block_size >= size);
-
+    if(block_meta_data->block_size < size){
+        return MM_FALSE;
+    }
+    
     uint32_t remaining_size = 
             block_meta_data->block_size - size;
 
@@ -418,14 +420,14 @@ mm_allocate_free_block(
     return MM_TRUE;
 }
 
-static vm_page_t *
-mm_get_page_satisfying_request(
+static block_meta_data_t *
+mm_allocate_free_data_block(
         vm_page_family_t *vm_page_family,
-        uint32_t req_size, 
-        block_meta_data_t **block_meta_data/*O/P*/){
+        uint32_t req_size){ 
 
     vm_bool_t status = MM_FALSE;
     vm_page_t *vm_page = NULL;
+    block_meta_data_t *block_meta_data = NULL;
 
     block_meta_data_t *biggest_block_meta_data = 
         mm_get_biggest_free_block_page_family(vm_page_family); 
@@ -435,31 +437,27 @@ mm_get_page_satisfying_request(
 
         /*Time to add a new page to Page family to satisfy the request*/
         vm_page = mm_family_new_page_add(vm_page_family);
+
         /*Allocate the free block from this page now*/
-        status = mm_allocate_free_block(vm_page_family, 
+        status = mm_split_free_data_block_for_allocation(vm_page_family, 
                     &vm_page->block_meta_data, req_size);
 
-        if(status == MM_FALSE){
-            *block_meta_data = NULL;
-             mm_vm_page_delete_and_free(vm_page);
-             return NULL;
-        }
+        if(status)
+            return &vm_page->block_meta_data;
 
-        *block_meta_data = &vm_page->block_meta_data;
-        return vm_page;
-    }
-    /*The biggest block meta data can satisfy the request*/
-    status = mm_allocate_free_block(vm_page_family, 
-        biggest_block_meta_data, req_size);
-        
-    if(status == MM_FALSE){
-        *block_meta_data = NULL;
         return NULL;
     }
+    /*Step 3*/
+    /*The biggest block meta data can satisfy the request*/
+    if(biggest_block_meta_data){
+        status = mm_split_free_data_block_for_allocation(vm_page_family, 
+                biggest_block_meta_data, req_size);
+    }
 
-    *block_meta_data = biggest_block_meta_data;
-
-    return MM_GET_PAGE_FROM_META_BLOCK(biggest_block_meta_data);
+    if(status)
+        return biggest_block_meta_data;
+    
+    return NULL;
 }
 
 /* The public fn to be invoked by the application for Dynamic 
@@ -467,6 +465,7 @@ mm_get_page_satisfying_request(
 void *
 xcalloc(char *struct_name, int units){
 
+    /*Step 1*/
     vm_page_family_t *pg_family = 
         lookup_page_family_by_name(struct_name);
 
@@ -485,37 +484,17 @@ xcalloc(char *struct_name, int units){
         return NULL;
     }
 
-    if(!pg_family->first_page){
-
-        pg_family->first_page = mm_family_new_page_add(pg_family);
-
-        if(mm_allocate_free_block(pg_family, 
-                    &pg_family->first_page->block_meta_data, 
-                    units * pg_family->struct_size)){
-            memset((char *)pg_family->first_page->page_memory, 0,
-                units * pg_family->struct_size);
-            return (void *)pg_family->first_page->page_memory;
-        }
-    }
-    
     /*Find the page which can satisfy the request*/
-    block_meta_data_t *free_block_meta_data;
-
-    vm_page_t *vm_page_curr = mm_get_page_satisfying_request(
-                        pg_family, units * pg_family->struct_size,
-                        &free_block_meta_data);
+    block_meta_data_t *free_block_meta_data = NULL;
+    /*Step 2.2*/
+    free_block_meta_data = mm_allocate_free_data_block(
+                            pg_family, units * pg_family->struct_size);
 
     if(free_block_meta_data){
-        /*Sanity Checks*/
-        if(free_block_meta_data->is_free == MM_TRUE || 
-            !IS_GLTHREAD_LIST_EMPTY(&free_block_meta_data->priority_thread_glue)){
-            assert(0);
-        }
         memset((char *)(free_block_meta_data + 1), 0, free_block_meta_data->block_size);
         return  (void *)(free_block_meta_data + 1);
     }
 
-    assert(0);
     return NULL;
 }
 
