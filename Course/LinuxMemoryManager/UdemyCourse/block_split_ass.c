@@ -44,6 +44,102 @@ mm_get_new_vm_page_from_kernel(int units){
     return (void *)vm_page;
 }
 
+static void
+split_blocks(block_meta_data_t *block_meta_data){
+
+/*
+ This function fragments the VM page of size 4096B 
+ as per the below diagram
+ +------------------+
+ |                  |
+ |                  |
+ |                  |
+ |      DB4         |
+ |                  |
+ |                  |
+ |                  |
+ +------------------+
+ |      MB4         |
+ | NF, 3264, 804    |
+ +------------------+
+ |                  |
+ |      DB3         |
+ |                  |
+ +------------------+
+ |      MB3         |
+ |F, 220, 556       |
+ +------------------+
+ |                  |
+ |      DB2         |
+ |                  |
+ |                  |
+ +------------------+
+ |     MB2          |
+ | NF, 300, 228     |
+ +------------------+
+ |                  |
+ |     DB1          |
+ |                  |
+ |                  |
+ |                  |
+ +------------------+
+ |     MB1          |
+ | F, 200, 0        |
+ +------------------+
+
+*/
+
+    block_meta_data_t *MB1 = block_meta_data;
+    MB1->is_free = MM_TRUE;
+    MB1->block_size = 200;
+    MB1->offset = 0;
+
+    block_meta_data_t *MB2 = NEXT_META_BLOCK_BY_SIZE(MB1);
+    MB2->is_free = MM_FALSE;
+    MB2->block_size = 300;
+    MB2->offset = MB1->offset + sizeof(block_meta_data_t) + MB1->block_size;
+
+    mm_bind_blocks_for_allocation(MB1, MB2);
+
+    block_meta_data_t *MB3 = NEXT_META_BLOCK_BY_SIZE(MB2);
+    MB3->is_free = MM_FALSE;
+    MB3->block_size = 220;
+    MB3->offset = MB2->offset + sizeof(block_meta_data_t) + MB2->block_size;
+
+    mm_bind_blocks_for_allocation(MB2, MB3);
+
+    block_meta_data_t *MB4 = NEXT_META_BLOCK_BY_SIZE(MB3);
+    MB4->is_free = MM_FALSE;
+    MB4->block_size = 3264;
+    MB4->offset = MB3->offset + sizeof(block_meta_data_t) + MB3->block_size;
+
+    mm_bind_blocks_for_allocation(MB3, MB4);
+
+}
+
+static void
+print_one_meta_block_stats(block_meta_data_t *block_meta_data){
+
+    printf("is_free = %s  size = %-5d  offset = %-5d  prev = %p  next = %p\n",
+            block_meta_data->is_free ? "TRUE", "FALSE",
+            block_meta_data->block_size, 
+            block_meta_data->offset, 
+            block_meta_data->prev_block,
+            block_meta_data->next_block);
+
+}
+
+static void
+print_all_meta_blocks(block_meta_data_t *first_meta_block){
+
+
+    while(first_meta_block){
+
+        print_one_meta_block_stats(block_meta_data);
+        first_meta_block = first_meta_block->next_block;
+    }
+}
+
 
 int
 main(int argc, char **argv){
@@ -66,8 +162,7 @@ main(int argc, char **argv){
     first_block_meta_data->offset = 0;
     first_block_meta_data->prev_block = 0;
     first_block_meta_data->next_block = 0;
-
-    print_meta_block_stats(first_block_meta_data);
-
+    split_blocks(first_block_meta_data);
+    print_all_meta_blocks(first_block_meta_data);
     return 0;
 }

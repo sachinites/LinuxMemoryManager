@@ -5,6 +5,12 @@
 
 #include <stdint.h>
 
+void *
+xcalloc(char *struct_name, int units);
+
+#define XCALLOC(units, struct_name) \
+    (xcalloc(#struct_name, units))
+
 /*Initialization Functions*/
 void
 mm_init();

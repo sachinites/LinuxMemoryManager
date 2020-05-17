@@ -107,6 +107,19 @@ typedef struct vm_page_for_families_{
 #define MAX_FAMILIES_PER_VM_PAGE   \
     ((SYSTEM_PAGE_SIZE - sizeof(vm_page_for_families_t *))/sizeof(vm_page_family_t))
 
+static inline block_meta_data_t *
+mm_get_biggest_free_block_page_family(
+        vm_page_family_t *vm_page_family){
+
+    glthread_t *biggest_free_block_glue =
+        vm_page_family->free_block_priority_list_head.right;
+
+    if(biggest_free_block_glue)
+        return glthread_to_block_meta_data(biggest_free_block_glue);
+
+    return NULL;
+}
+
 vm_page_t *
 allocate_vm_page();
 

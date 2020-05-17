@@ -15,6 +15,17 @@ mm_init(){
     SYSTEM_PAGE_SIZE = getpagesize();
 }
 
+static inline uint32_t
+mm_max_page_allocatable_memory(int units){
+
+    return (uint32_t)
+        ((SYSTEM_PAGE_SIZE * units) - offset_of(vm_page_t, page_memory));
+}
+
+#define MAX_PAGE_ALLOCATABLE_MEMORY(units) \
+    (mm_max_page_allocatable_memory(units))
+
+
 /*Function to request VM page from kernel*/
 static void *
 mm_get_new_vm_page_from_kernel(int units){
@@ -58,14 +69,6 @@ mm_union_free_blocks(block_meta_data_t *first,
 
     if(second->next_block)
         second->next_block->prev_block = first;
-}
-
-static inline uint32_t
-mm_max_page_allocatable_memory (int units){
-
-    return (uint32_t)
-        ((SYSTEM_PAGE_SIZE * units) - \
-         offset_of(vm_page_t, page_memory));
 }
 
 vm_page_t *
@@ -386,6 +389,29 @@ mm_allocate_free_data_block(
     if(status)
         return biggest_block_meta_data;
 
+    return NULL;
+}
+
+vm_page_family_t *
+lookup_page_family_by_name(char *struct_name){
+
+    vm_page_family_t *vm_page_family_curr = NULL;
+    vm_page_for_families_t *vm_page_for_families_curr = NULL;
+
+    for(vm_page_for_families_curr = first_vm_page_for_families;
+            vm_page_for_families_curr;
+            vm_page_for_families_curr = vm_page_for_families_curr->next){
+
+        ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_for_families, vm_page_family_curr){
+
+            if(strncmp(vm_page_family_curr->struct_name,
+                        struct_name,
+                        MM_MAX_STRUCT_NAME) == 0){
+
+                return vm_page_family_curr;
+            }
+        } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr);
+    }
     return NULL;
 }
 

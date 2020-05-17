@@ -513,6 +513,16 @@ xcalloc(char *struct_name, int units){
     return NULL;
 }
 
+static int 
+mm_get_hard_internal_memory_frag_size(
+            block_meta_data_t *first,
+            block_meta_data_t *second){
+
+    if(!first || !second) assert(0);
+
+    return (int)((unsigned long)second - (unsigned long)(first + 1));
+}
+
 static void
 mm_union_free_blocks(block_meta_data_t *first,
         block_meta_data_t *second){
@@ -521,7 +531,8 @@ mm_union_free_blocks(block_meta_data_t *first,
         second->is_free == MM_TRUE);
 
     first->block_size += sizeof(block_meta_data_t) +
-            second->block_size;
+            second->block_size + 
+            mm_get_hard_internal_memory_frag_size(first, second);
     remove_glthread(&first->priority_thread_glue);
     remove_glthread(&second->priority_thread_glue);
     mm_bind_blocks_for_deallocation(first, second);
@@ -575,7 +586,20 @@ mm_free_blocks(block_meta_data_t *to_be_free_block){
 
     block_meta_data_t *next_block = NEXT_META_BLOCK(to_be_free_block);
 
-    if(next_block && next_block->is_free == MM_TRUE){
+    /*Page Boundry condition*/
+    if(!next_block){
+        /* Block being freed is the upper most free data block
+         * in a VM data page, check of hard internal fragmented 
+         * memory and merge*/
+        char *end_address_of_vm_page = (char *)(hosting_page + 1);
+        char *end_address_of_free_data_block = 
+            (char *)(to_be_free_block + 1) + to_be_free_block->block_size;
+        int internal_mem_fragmentation = (int)((unsigned long)end_address_of_vm_page - 
+            (unsigned long)end_address_of_free_data_block);
+        to_be_free_block->block_size += internal_mem_fragmentation;
+    }
+
+    else if(next_block && next_block->is_free == MM_TRUE){
         /*Union two free blocks*/
         mm_union_free_blocks(to_be_free_block, next_block);
         return_block = to_be_free_block;
