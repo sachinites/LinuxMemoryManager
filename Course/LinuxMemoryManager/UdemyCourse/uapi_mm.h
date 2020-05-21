@@ -24,8 +24,9 @@ mm_instantiate_new_page_family(
 #define MM_REG_STRUCT(struct_name)  \
     (mm_instantiate_new_page_family(#struct_name, sizeof(struct_name)))
 
-void
-mm_print_registered_page_families();
+void mm_print_memory_usage(char *struct_name);
+void mm_print_registered_page_families();
+void mm_print_block_usage();
 
 #endif /* __UAPI_MM__ */
 

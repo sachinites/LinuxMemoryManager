@@ -518,9 +518,12 @@ mm_get_hard_internal_memory_frag_size(
             block_meta_data_t *first,
             block_meta_data_t *second){
 
-    if(!first || !second) assert(0);
+    /*Both blocks should be Freed*/
+    if(first->is_free == MM_FALSE || second->is_free == MM_FALSE) assert(0);
 
-    return (int)((unsigned long)second - (unsigned long)(first + 1));
+    block_meta_data_t *next_block = NEXT_META_BLOCK_BY_SIZE(first); 
+    
+    return (int)((unsigned long)second - (unsigned long)(next_block));
 }
 
 static void
