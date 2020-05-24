@@ -518,11 +518,7 @@ mm_get_hard_internal_memory_frag_size(
             block_meta_data_t *first,
             block_meta_data_t *second){
 
-    /*Both blocks should be Freed*/
-    if(first->is_free == MM_FALSE || second->is_free == MM_FALSE) assert(0);
-
-    block_meta_data_t *next_block = NEXT_META_BLOCK_BY_SIZE(first); 
-    
+    block_meta_data_t *next_block = NEXT_META_BLOCK_BY_SIZE(first);  
     return (int)((unsigned long)second - (unsigned long)(next_block));
 }
 
@@ -532,10 +528,6 @@ mm_union_free_blocks(block_meta_data_t *first,
 
     assert(first->is_free == MM_TRUE &&
         second->is_free == MM_TRUE);
-
-    first->block_size += sizeof(block_meta_data_t) +
-            second->block_size + 
-            mm_get_hard_internal_memory_frag_size(first, second);
     remove_glthread(&first->priority_thread_glue);
     remove_glthread(&second->priority_thread_glue);
     mm_bind_blocks_for_deallocation(first, second);
@@ -580,29 +572,34 @@ mm_free_blocks(block_meta_data_t *to_be_free_block){
 
     vm_page_family_t *vm_page_family = hosting_page->pg_family;
 
-    vm_page_family->total_memory_in_use_by_app -= 
-        sizeof(block_meta_data_t) + to_be_free_block->block_size;
+    return_block = to_be_free_block;
     
     to_be_free_block->is_free = MM_TRUE;
     
-    return_block = to_be_free_block;
-
     block_meta_data_t *next_block = NEXT_META_BLOCK(to_be_free_block);
 
-    /*Page Boundry condition*/
-    if(!next_block){
+    /*Handling Hard IF memory*/
+    if(next_block){
+        /*Scenario 1 : When data block to be freed is not the last 
+         * upper most meta block in a VM data page*/
+        to_be_free_block->block_size += 
+            mm_get_hard_internal_memory_frag_size (to_be_free_block, next_block);
+    }
+    else {
+        /* Scenario 2: Page Boundry condition*/
         /* Block being freed is the upper most free data block
          * in a VM data page, check of hard internal fragmented 
          * memory and merge*/
-        char *end_address_of_vm_page = (char *)(hosting_page + 1);
+        char *end_address_of_vm_page = (char *)((char *)hosting_page + SYSTEM_PAGE_SIZE);
         char *end_address_of_free_data_block = 
             (char *)(to_be_free_block + 1) + to_be_free_block->block_size;
         int internal_mem_fragmentation = (int)((unsigned long)end_address_of_vm_page - 
-            (unsigned long)end_address_of_free_data_block);
+                (unsigned long)end_address_of_free_data_block);
         to_be_free_block->block_size += internal_mem_fragmentation;
     }
-
-    else if(next_block && next_block->is_free == MM_TRUE){
+    
+    /*Now perform Merging*/
+    if(next_block && next_block->is_free == MM_TRUE){
         /*Union two free blocks*/
         mm_union_free_blocks(to_be_free_block, next_block);
         return_block = to_be_free_block;
@@ -614,7 +611,7 @@ mm_free_blocks(block_meta_data_t *to_be_free_block){
         mm_union_free_blocks(prev_block, to_be_free_block);
         return_block = prev_block;
     }
-    
+   
     if(mm_is_vm_page_empty(hosting_page)){
         mm_vm_page_delete_and_free(hosting_page);
         return NULL;
