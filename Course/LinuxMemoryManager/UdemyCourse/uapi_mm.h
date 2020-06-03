@@ -7,9 +7,13 @@
 
 void *
 xcalloc(char *struct_name, int units);
+void xfree(void *ptr);
 
 #define XCALLOC(units, struct_name) \
     (xcalloc(#struct_name, units))
+
+#define XFREE(ptr)  \
+    (xfree(ptr))
 
 /*Initialization Functions*/
 void
