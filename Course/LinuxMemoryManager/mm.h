@@ -189,4 +189,6 @@ lookup_page_family_by_name(char *struct_name);
     }}
 
 void mm_vm_page_delete_and_free(vm_page_t *vm_page);
+void *xcalloc(char *struct_name, int units);
+void xfree(void *app_data);
 #endif /**/

@@ -231,7 +231,7 @@ allocate_vm_page(vm_page_family_t *vm_page_family){
 }
 
 
-void
+vm_page_family_t *
 mm_instantiate_new_page_family(
     char *struct_name,
     uint32_t struct_size){
@@ -242,7 +242,7 @@ mm_instantiate_new_page_family(
     if(struct_size > mm_max_page_allocatable_memory(1)){
         printf("Error : %s() Structure %s Size exceeds system page size\n",
             __FUNCTION__, struct_name);
-        return;
+        return 0;
     }
 
     if(!first_vm_page_for_families){
@@ -253,7 +253,7 @@ mm_instantiate_new_page_family(
         first_vm_page_for_families->vm_page_family[0].struct_size = struct_size;
         first_vm_page_for_families->vm_page_family[0].first_page = NULL;
         init_glthread(&first_vm_page_for_families->vm_page_family[0].free_block_priority_list_head);
-        return;
+        return &first_vm_page_for_families->vm_page_family[0];
     }
     
     uint32_t count = 0;
@@ -282,6 +282,7 @@ mm_instantiate_new_page_family(
     vm_page_family_curr->struct_size = struct_size;
     vm_page_family_curr->first_page = NULL;
     init_glthread(&vm_page_family_curr->free_block_priority_list_head);
+	return vm_page_family_curr;
 }
 
 vm_page_family_t *
@@ -475,13 +476,44 @@ mm_allocate_free_data_block(
     return NULL;
 }
 
+static void *
+mm_handle_miscellaneous_mem_allocation(uint32_t size_in_bytes){
+
+	vm_page_family_t *pg_family;
+	char page_family_name[MM_MAX_STRUCT_NAME];
+	
+	sprintf(page_family_name, "DYN-PG-FAM-%d", size_in_bytes);
+
+	pg_family = lookup_page_family_by_name(page_family_name);
+
+	if(!pg_family) {
+		pg_family = mm_instantiate_new_page_family(
+							page_family_name,
+							size_in_bytes);
+	}
+
+	if(!pg_family) {
+		printf("Error : %s() Dynamic Page Family Registration Failed for size = %uB\n",
+			__FUNCTION__, size_in_bytes);
+		return NULL;
+	}
+	
+	return xcalloc(page_family_name, 1);
+}
+
 /* The public fn to be invoked by the application for Dynamic 
  * Memory Allocations.*/
 void *
 xcalloc(char *struct_name, int units){
 
+	vm_page_family_t *pg_family;
+
+	if(!struct_name) {
+		return mm_handle_miscellaneous_mem_allocation(units);
+	}
+
     /*Step 1*/
-    vm_page_family_t *pg_family = 
+    pg_family = 
         lookup_page_family_by_name(struct_name);
 
     if(!pg_family){
