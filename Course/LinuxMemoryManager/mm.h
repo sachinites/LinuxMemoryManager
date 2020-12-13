@@ -147,10 +147,10 @@ allocate_vm_page();
 
 #define ITERATE_PAGE_FAMILIES_BEGIN(vm_page_for_families_ptr, curr)       \
 {                                                            \
-    uint32_t count = 0;                                      \
+    uint32_t _count = 0;                                     \
     for(curr = (vm_page_family_t *)&vm_page_for_families_ptr->vm_page_family[0];   \
-        curr->struct_size && count < MAX_FAMILIES_PER_VM_PAGE; \
-        curr++,count++){
+        curr->struct_size && _count < MAX_FAMILIES_PER_VM_PAGE; \
+        curr++,_count++){
 
 #define ITERATE_PAGE_FAMILIES_END(vm_page_for_families_ptr, curr)   }}
 

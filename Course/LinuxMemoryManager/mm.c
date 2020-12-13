@@ -294,7 +294,7 @@ lookup_page_family_by_name(char *struct_name){
             vm_page_for_families_curr; 
             vm_page_for_families_curr = vm_page_for_families_curr->next){
 
-        ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_for_families, vm_page_family_curr){
+        ITERATE_PAGE_FAMILIES_BEGIN(vm_page_for_families_curr, vm_page_family_curr){
 
             if(strncmp(vm_page_family_curr->struct_name,
                         struct_name,
@@ -302,7 +302,7 @@ lookup_page_family_by_name(char *struct_name){
 
                 return vm_page_family_curr;
             }
-        } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr);
+        } ITERATE_PAGE_FAMILIES_END(vm_page_for_families_curr, vm_page_family_curr);
     }
     return NULL;
 }
