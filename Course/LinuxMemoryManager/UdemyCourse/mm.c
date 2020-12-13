@@ -195,17 +195,17 @@ mm_instantiate_new_page_family(
         return;
     }
 
+	vm_page_family_curr = lookup_page_family_by_name(struct_name);
+
+	if(vm_page_family_curr) {
+		assert(0);
+	}
+
     uint32_t count = 0;
 
     ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_for_families, vm_page_family_curr){
 
-         if(strncmp(vm_page_family_curr->struct_name,
-            struct_name,MM_MAX_STRUCT_NAME) != 0){
-            count++;
-            continue;
-        }
-
-        assert(0);
+	    count++;
 
     } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr);
 
