@@ -255,18 +255,19 @@ mm_instantiate_new_page_family(
         init_glthread(&first_vm_page_for_families->vm_page_family[0].free_block_priority_list_head);
         return;
     }
-    
+
+	vm_page_family_curr = lookup_page_family_by_name(struct_name);
+
+	if(vm_page_family_curr) {
+		assert(0);
+	}     
+
     uint32_t count = 0;
     
     ITERATE_PAGE_FAMILIES_BEGIN(first_vm_page_for_families, vm_page_family_curr){
 
-        if(strncmp(vm_page_family_curr->struct_name, 
-            struct_name,MM_MAX_STRUCT_NAME) != 0){
-            count++;
-            continue;
-        }
-        /*Page family already exists*/
-        assert(0);
+		count++;
+
     } ITERATE_PAGE_FAMILIES_END(first_vm_page_for_families, vm_page_family_curr);
 
     if(count == MAX_FAMILIES_PER_VM_PAGE){
