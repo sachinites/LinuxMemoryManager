@@ -1,0 +1,30 @@
+vm@ubuntu:~/src/LinuxMemoryManager/Course/LinuxMemoryManager/UdemyCourse$ gcc -g -c testapp.c -o testapp.o
+vm@ubuntu:~/src/LinuxMemoryManager/Course/LinuxMemoryManager/UdemyCourse$ gcc -g -c mm.c -o mm.o
+vm@ubuntu:~/src/LinuxMemoryManager/Course/LinuxMemoryManager/UdemyCourse$ gcc -g -c gluethread/glthread.c -o gluethread/glthread.o
+vm@ubuntu:~/src/LinuxMemoryManager/Course/LinuxMemoryManager/UdemyCourse$ gcc -g gluethread/glthread.o mm.o testapp.o -o test.exe
+vm@ubuntu:~/src/LinuxMemoryManager/Course/LinuxMemoryManager/UdemyCourse$ ./test.exe
+Page Family : emp_t, Size = 36
+Page Family : student_t, Size = 56
+
+SCENARIO 1 : ***********
+
+Page Size = 4096 Bytes
+vm_page_family : emp_t, struct size = 36
+                 next = (nil), prev = (nil)
+                 page family = emp_t
+                        0x7f6bbb5ad018 Block 0   ALLOCATED  block_size = 36      offset = 24      prev = (nil)           next = 0x7f6bbb5ad06c
+                        0x7f6bbb5ad06c Block 1   ALLOCATED  block_size = 36      offset = 108     prev = 0x7f6bbb5ad018  next = 0x7f6bbb5ad0c0
+                        0x7f6bbb5ad0c0 Block 2   ALLOCATED  block_size = 36      offset = 192     prev = 0x7f6bbb5ad06c  next = 0x7f6bbb5ad114
+                        0x7f6bbb5ad114 Block 3   F R E E D  block_size = 3772    offset = 276     prev = 0x7f6bbb5ad0c0  next = (nil)
+
+vm_page_family : student_t, struct size = 56
+                 next = (nil), prev = (nil)
+                 page family = student_t
+                        0x7f6bbb5ac018 Block 0   ALLOCATED  block_size = 56      offset = 24      prev = (nil)           next = 0x7f6bbb5ac080
+                        0x7f6bbb5ac080 Block 1   ALLOCATED  block_size = 56      offset = 128     prev = 0x7f6bbb5ac018  next = 0x7f6bbb5ac0e8
+                        0x7f6bbb5ac0e8 Block 2   F R E E D  block_size = 3816    offset = 232     prev = 0x7f6bbb5ac080  next = (nil)
+
+# Of VM Pages in Use : 2 (8192 Bytes)
+Total Memory being used by Memory Manager = 8192 Bytes
+emp_t                  TBC : 4       FBC : 1       OBC : 3    AppMemUsage : 252
+student_t              TBC : 3       FBC : 1       OBC : 2    AppMemUsage : 208
