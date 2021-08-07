@@ -133,6 +133,7 @@ mm_get_new_vm_page_from_kernel(int units){
 
 #endif
     memset(vm_page, 0, units * SYSTEM_PAGE_SIZE);
+    vm_page->page_size = units * SYSTEM_PAGE_SIZE;
     return vm_page;
 }
 
@@ -178,13 +179,14 @@ mm_sbrk_free_vm_page(vm_page_t *vm_page, int units){
 static void
 mm_return_vm_page_to_kernel(void *ptr, int units){
 
-  MARK_VM_PAGE_EMPTY(((vm_page_t *)ptr));
+ int rc = 0;
+MARK_VM_PAGE_EMPTY(((vm_page_t *)ptr));
 
 #ifdef __USE_GLIBC__
     free(ptr); 
 #elif defined(__USE_MMAP__)
-    if(munmap(ptr, units * SYSTEM_PAGE_SIZE)){
-        printf("Error : Could not munmap VM page to kernel");
+    if(rc = munmap(ptr, units * SYSTEM_PAGE_SIZE)){
+        printf("Error : Could not munmap VM page (%u) to kernel, errno = %d\n", ((vm_page_t *)ptr)->page_size, errno);
     }
 #elif defined(__USE_BRK__)
     mm_sbrk_free_vm_page((vm_page_t *)ptr, units);
@@ -193,16 +195,16 @@ mm_return_vm_page_to_kernel(void *ptr, int units){
 
 /*Return a fresh new virtual page*/
 vm_page_t *
-allocate_vm_page(vm_page_family_t *vm_page_family){
+allocate_vm_page(vm_page_family_t *vm_page_family, int units){
 
     vm_page_t *prev_page = 
         mm_get_available_page_index(vm_page_family);
 
-    vm_page_t *vm_page = mm_get_new_vm_page_from_kernel(1);
+    vm_page_t *vm_page = mm_get_new_vm_page_from_kernel(units);
     vm_page->block_meta_data.is_free = MM_TRUE;
     vm_page->block_meta_data.block_size = 
-        MAX_PAGE_ALLOCATABLE_MEMORY(1);
-    vm_page->block_meta_data.offset = 
+        MAX_PAGE_ALLOCATABLE_MEMORY(units);
+    vm_page->block_meta_data.offset =  
         offset_of(vm_page_t, block_meta_data);
     init_glthread(&vm_page->block_meta_data.priority_thread_glue);
     vm_page->block_meta_data.prev_block = NULL;
@@ -238,12 +240,6 @@ mm_instantiate_new_page_family(
 
     vm_page_family_t *vm_page_family_curr = NULL;
     vm_page_for_families_t *new_vm_page_for_families = NULL;
-
-    if(struct_size > mm_max_page_allocatable_memory(1)){
-        printf("Error : %s() Structure %s Size exceeds system page size\n",
-            __FUNCTION__, struct_name);
-        return;
-    }
 
     if(!first_vm_page_for_families){
         first_vm_page_for_families = (vm_page_for_families_t *)mm_get_new_vm_page_from_kernel(1);
@@ -339,9 +335,9 @@ mm_add_free_block_meta_data_to_free_block_list(
 }
 
 static vm_page_t *
-mm_family_new_page_add(vm_page_family_t *vm_page_family){
+mm_family_new_page_add(vm_page_family_t *vm_page_family, int units){
 
-    vm_page_t *vm_page = allocate_vm_page(vm_page_family);
+    vm_page_t *vm_page = allocate_vm_page(vm_page_family, units);
 
     if(!vm_page)
         return NULL;
@@ -445,6 +441,8 @@ mm_allocate_free_data_block(
     vm_page_t *vm_page = NULL;
     block_meta_data_t *block_meta_data = NULL;
 
+    int n_pages_required = ( req_size / MAX_PAGE_ALLOCATABLE_MEMORY(1)) + 1;
+
     block_meta_data_t *biggest_block_meta_data = 
         mm_get_biggest_free_block_page_family(vm_page_family); 
 
@@ -452,7 +450,7 @@ mm_allocate_free_data_block(
         biggest_block_meta_data->block_size < req_size){
 
         /*Time to add a new page to Page family to satisfy the request*/
-        vm_page = mm_family_new_page_add(vm_page_family);
+        vm_page = mm_family_new_page_add(vm_page_family, n_pages_required);
 
         /*Allocate the free block from this page now*/
         status = mm_split_free_data_block_for_allocation(vm_page_family, 
@@ -493,13 +491,6 @@ xcalloc(char *struct_name, int units){
         return NULL;
     }
     
-    if(units * pg_family->struct_size > MAX_PAGE_ALLOCATABLE_MEMORY(1)){
-        
-        printf("Error : Memory Requested Exceeds Page Size\n");
-        assert(0);
-        return NULL;
-    }
-
     /*Find the page which can satisfy the request*/
     block_meta_data_t *free_block_meta_data = NULL;
     
@@ -550,7 +541,8 @@ mm_vm_page_delete_and_free(
         vm_page_family->no_of_system_calls_to_alloc_dealloc_vm_pages++;
         vm_page->next = NULL;
         vm_page->prev = NULL;
-        mm_return_vm_page_to_kernel((void *)vm_page, 1);
+        mm_return_vm_page_to_kernel((void *)vm_page, 
+                    vm_page->page_size / SYSTEM_PAGE_SIZE);
         return;
     }
 
@@ -558,7 +550,7 @@ mm_vm_page_delete_and_free(
         vm_page->next->prev = vm_page->prev;
     vm_page->prev->next = vm_page->next;
     vm_page_family->no_of_system_calls_to_alloc_dealloc_vm_pages++;
-    mm_return_vm_page_to_kernel((void *)vm_page, 1);
+    mm_return_vm_page_to_kernel((void *)vm_page, vm_page->page_size / SYSTEM_PAGE_SIZE);
 }
 
 static block_meta_data_t *
@@ -591,7 +583,7 @@ mm_free_blocks(block_meta_data_t *to_be_free_block){
         /* Block being freed is the upper most free data block
          * in a VM data page, check of hard internal fragmented 
          * memory and merge*/
-        char *end_address_of_vm_page = (char *)((char *)hosting_page + SYSTEM_PAGE_SIZE);
+        char *end_address_of_vm_page = (char *)((char *)hosting_page + hosting_page->page_size);
         char *end_address_of_free_data_block = 
             (char *)(to_be_free_block + 1) + to_be_free_block->block_size;
         int internal_mem_fragmentation = (int)((unsigned long)end_address_of_vm_page - 
@@ -650,7 +642,8 @@ mm_print_vm_page_details(vm_page_t *vm_page, uint32_t i){
 
     printf("\tPage Index : %u \n", vm_page->page_index);
     printf("\t\t next = %p, prev = %p\n", vm_page->next, vm_page->prev);
-    printf("\t\t page family = %s\n", vm_page->pg_family->struct_name);
+    printf("\t\t page family = %s, page_size = %uB\n", 
+        vm_page->pg_family->struct_name, vm_page->page_size);
 
     uint32_t j = 0;
     block_meta_data_t *curr;
