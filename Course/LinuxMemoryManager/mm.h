@@ -31,9 +31,9 @@
 #ifndef __MM__
 #define __MM__
 
+#include <stddef.h> /*for size_t*/
 #include <stdint.h>
 #include "gluethread/glthread.h"
-#include <stddef.h> /*for size_t*/
 
 
 typedef enum{
@@ -52,7 +52,7 @@ typedef struct block_meta_data_{
     struct block_meta_data_ *next_block;
 } block_meta_data_t;
 GLTHREAD_TO_STRUCT(glthread_to_block_meta_data, 
-    block_meta_data_t, priority_thread_glue, glthread_ptr);
+    block_meta_data_t, priority_thread_glue);
 
 #define offset_of(container_structure, field_name)  \
     ((size_t)&(((container_structure *)0)->field_name))
@@ -116,6 +116,13 @@ typedef struct vm_page_for_families_{
     vm_page_family_t vm_page_family[0];
 } vm_page_for_families_t;
 
+typedef struct mm_instance_ {
+
+    vm_page_for_families_t *first_vm_page_for_families;
+    vm_page_family_t misc_vm_page_family;
+    void *gb_hsba;
+} mm_instance_t;
+
 #define MAX_FAMILIES_PER_VM_PAGE   \
     ((SYSTEM_PAGE_SIZE - sizeof(vm_page_for_families_t *))/sizeof(vm_page_family_t))
 
@@ -156,7 +163,7 @@ allocate_vm_page();
 #define ITERATE_PAGE_FAMILIES_END(vm_page_for_families_ptr, curr)   }}
 
 vm_page_family_t *
-lookup_page_family_by_name(char *struct_name);
+lookup_page_family_by_name(mm_instance_t *mm_inst, char *struct_name);
 
 
 #define ITERATE_VM_PAGE_BEGIN(vm_page_family_ptr, curr)   \

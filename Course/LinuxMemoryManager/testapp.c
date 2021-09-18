@@ -1,6 +1,7 @@
 #include <stdio.h>
-#include "uapi_mm.h"
+#include <stdlib.h>
 #include <assert.h>
+#include "uapi_mm.h"
 
 typedef struct emp_ {
 
@@ -22,11 +23,26 @@ int
 main(int argc, char **argv){
 
     mm_init();
-    MM_REG_STRUCT(emp_t);
-    MM_REG_STRUCT(student_t);
-    mm_print_registered_page_families();
+    MM_REG_STRUCT(0, emp_t);
+    MM_REG_STRUCT(0, student_t);
+    mm_print_registered_page_families(0);
 
-#if 0
+    mm_print_memory_usage(0, 0);
+    mm_print_block_usage(0);
+
+    char *buff1 = XCALLOC_BUFF(0, 32);
+    char *buff2 = XCALLOC_BUFF(0, 32);
+    assert(buff1);
+    assert(buff2);
+    mm_print_variable_buffers(0);
+    xfree(buff1);
+    xfree(buff2);
+    mm_print_variable_buffers(0);
+#if 0    
+    mm_print_memory_usage(0);
+    mm_print_block_usage();
+
+
     emp_t *emp1 = xcalloc("emp_t", 1);
     emp_t *emp2 = xcalloc("emp_t", 1);
     emp_t *emp3 = xcalloc("emp_t", 1);
@@ -49,7 +65,7 @@ main(int argc, char **argv){
     mm_print_memory_usage();
     xfree(stud3);
     mm_print_memory_usage();
-#endif
+
     int i = 0;
     student_t *stud = NULL, *prev = NULL;
     student_t *first = NULL;
@@ -65,7 +81,8 @@ main(int argc, char **argv){
     }
     mm_print_memory_usage(0);
     mm_print_block_usage();
-    #if 1
+    #endif
+    #if 0
     i = 0;
     student_t *next = NULL;
     for( ; first; first = next){
