@@ -1,7 +1,11 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\Course",
+    "\\Course\\LinuxMemoryManager",
+    "\\Course\\LinuxMemoryManager\\UdemyCourse",
+    "\\Course\\LinuxMemoryManager\\UdemyCourse\\gluethread"
   ],
-  "SelectedNode": "\\mm.h",
+  "SelectedNode": "\\Course\\LinuxMemoryManager\\UdemyCourse\\gluethread\\glthread.h",
   "PreviewInSolutionExplorer": false
 }
