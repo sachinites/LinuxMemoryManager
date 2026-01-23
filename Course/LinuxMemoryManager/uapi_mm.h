@@ -3,7 +3,7 @@
  *
  *       Filename:  uapi_mm.h
  *
- *    Description:  This Header file ocntains public APIs to be used by the application
+ *    Description:  This Header file contains public APIs to be used by the application
  *
  *        Version:  1.0
  *        Created:  02/01/2020 10:00:27 PM
